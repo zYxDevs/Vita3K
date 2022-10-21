@@ -19,10 +19,7 @@ def allocate_char(chars_used, name):
     # Fallback to the first free alphabetic character
     c = 'a'
     while c in chars_used:
-        if c == 'z':
-            c = 'A'
-        else:
-            c = chr(ord(c) + 1)
+        c = 'A' if c == 'z' else chr(ord(c) + 1)
     return c
 
 
@@ -31,6 +28,7 @@ matchers = []
 
 d = yaml.safe_load(open('grammar.yaml'))
 
+SUFFIX = '"),'
 for k, v in d.items():
     members = []
     description = v.get('description', '')
@@ -80,7 +78,6 @@ for k, v in d.items():
     annotations = []
     chars_used = {}
     PREFIX = f'INST(&V::{v["handler"]}, "{k} ()", "'
-    SUFFIX = '"),'
     indent = len(PREFIX)
     for name, offset, props in members:
         indentation = ' ' * (indent + offset) if STAIRCASE_INDENT else '  '
@@ -134,7 +131,7 @@ def update_matcher():
     for matcher in matchers:
         out += matcher
         out += '\n'
-    out = '\n'.join(['        ' + x for x in out.splitlines()])
+    out = '\n'.join([f'        {x}' for x in out.splitlines()])
     out = """
 #define INST(fn, name, bitstring) shader::decoder::detail::detail<USSEMatcher<V>>::GetMatcher(fn, name, bitstring)
         // clang-format off
@@ -148,16 +145,15 @@ def update_visitor():
     for func in funcdefs:
         out += f'bool {func[0]}({func[1]});\n\n'
     def tab(x):
-        if x != '':
-            return '    ' + x
-        return ''
+        return f'    {x}' if x != '' else ''
+
     out = '\n'.join([tab(x) for x in out.splitlines()])
     replace_file('../../vita3k/shader/include/shader/usse_translator.h', header_pat, r'\1'+out+r'    \2')
 
     # update sources
     def src_pat(name):
-        return r'(bool USSETranslatorVisitor::' + name + r'\()[^)]*(\))'
-    
+        return f'(bool USSETranslatorVisitor::{name}' + r'\()[^)]*(\))'
+
     files = glob('../../vita3k/shader/src/translator/*.cpp')
     for file in files:
         replace_file(file, [src_pat(func[0]) for func in funcdefs], [r'\1\n    '+func[1]+r'\2' for func in funcdefs])
