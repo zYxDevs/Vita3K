@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,9 +17,13 @@
 
 #include <gxm/functions.h>
 #include <shader/gxp_parser.h>
-#include <shader/usse_program_analyzer.h>
+#include <shader/usse_types.h>
 #include <util/align.h>
 #include <util/log.h>
+
+#include <algorithm>
+#include <map>
+#include <tuple>
 
 namespace shader {
 
@@ -40,36 +44,32 @@ GenericType translate_generic_type(const gxp::GenericParameterType &type) {
 
 std::tuple<DataType, std::string> get_parameter_type_store_and_name(const SceGxmParameterType &type) {
     switch (type) {
-    case SCE_GXM_PARAMETER_TYPE_F32: {
+    case SCE_GXM_PARAMETER_TYPE_F32:
         return std::make_tuple(DataType::F32, "float");
-    }
 
-    case SCE_GXM_PARAMETER_TYPE_F16: {
+    case SCE_GXM_PARAMETER_TYPE_F16:
         return std::make_tuple(DataType::F16, "half");
-    }
 
-    case SCE_GXM_PARAMETER_TYPE_U16: {
+    case SCE_GXM_PARAMETER_TYPE_U16:
         return std::make_tuple(DataType::UINT16, "ushort");
-    }
 
-    case SCE_GXM_PARAMETER_TYPE_S16: {
+    case SCE_GXM_PARAMETER_TYPE_S16:
         return std::make_tuple(DataType::INT16, "ishort");
-    }
 
-    case SCE_GXM_PARAMETER_TYPE_U8: {
+    case SCE_GXM_PARAMETER_TYPE_U8:
         return std::make_tuple(DataType::UINT8, "uchar");
-    }
 
-    case SCE_GXM_PARAMETER_TYPE_S8: {
+    case SCE_GXM_PARAMETER_TYPE_S8:
         return std::make_tuple(DataType::INT8, "ichar");
-    }
 
-    case SCE_GXM_PARAMETER_TYPE_U32: {
+    case SCE_GXM_PARAMETER_TYPE_C10:
+        return std::make_tuple(DataType::C10, "fixed");
+
+    case SCE_GXM_PARAMETER_TYPE_U32:
         return std::make_tuple(DataType::UINT32, "uint");
-    }
-    case SCE_GXM_PARAMETER_TYPE_S32: {
+
+    case SCE_GXM_PARAMETER_TYPE_S32:
         return std::make_tuple(DataType::INT32, "int");
-    }
 
     default:
         return std::make_tuple(DataType::UNK, "unk");
@@ -80,7 +80,7 @@ ProgramInput get_program_input(const SceGxmProgram &program) {
     ProgramInput program_input;
     std::map<int, UniformBuffer> uniform_buffers;
 
-    // TODO split these to functions (e.g. get_literals, get_paramters)
+    // TODO split these to functions (e.g. get_literals, get_parameters)
     auto gxp_parameters = program.program_parameters();
     auto vertex_varyings_ptr = program.vertex_varyings();
 
@@ -159,7 +159,7 @@ ProgramInput get_program_input(const SceGxmProgram &program) {
                     buffer.size = std::max(parameter.resource_index + parameter_size_in_f32, buffer.size);
 
                     if (!container) {
-                        buffer.reg_start_offset = std::min(buffer.reg_start_offset, static_cast<uint32_t>(offset));
+                        buffer.reg_start_offset = std::min(buffer.reg_start_offset, offset);
                     }
                 }
 

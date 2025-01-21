@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -30,11 +30,11 @@ struct CommandHelper;
 
 #define COMMAND(name)                                                                                \
     void cmd_##name(renderer::State &renderer, MemState &mem, Config &config, CommandHelper &helper, \
-        const FeatureState &features, Context *render_context, const char *cache_path, const char *title_id, const char *self_name)
+        const FeatureState &features, Context *render_context)
 
 #define COMMAND_SET_STATE(name)                                                                                \
     void cmd_set_state_##name(renderer::State &renderer, MemState &mem, Config &config, CommandHelper &helper, \
-        Context *render_context, const char *cache_path, const char *title_id)
+        Context *render_context)
 
 COMMAND_SET_STATE(region_clip);
 COMMAND_SET_STATE(program);

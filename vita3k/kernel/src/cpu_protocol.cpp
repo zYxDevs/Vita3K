@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,8 +16,9 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 #include <kernel/cpu_protocol.h>
+
+#include <cpu/functions.h>
 #include <kernel/state.h>
-#include <util/lock_and_find.h>
 
 CPUProtocol::CPUProtocol(KernelState &kernel, MemState &mem, const CallImportFunc &func)
     : call_import(func)
@@ -54,7 +55,7 @@ void CPUProtocol::call_svc(CPUState &cpu, uint32_t svc, Address pc, ThreadState 
     // the only benefit of using thread_id instead--namely less locking-- has been gone for long
     call_import(cpu, nid, thread.id);
 
-    // ARM recommends claering exclusive state inside interrupt handler
+    // ARM recommends clearing exclusive state inside interrupt handler
     clear_exclusive(kernel->exclusive_monitor, get_processor_id(cpu));
 }
 
@@ -62,6 +63,6 @@ Address CPUProtocol::get_watch_memory_addr(Address addr) {
     return kernel->debugger.get_watch_memory_addr(addr);
 }
 
-ExclusiveMonitorPtr CPUProtocol::get_exlusive_monitor() {
+ExclusiveMonitorPtr CPUProtocol::get_exclusive_monitor() {
     return kernel->exclusive_monitor;
 }

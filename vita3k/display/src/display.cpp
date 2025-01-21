@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -26,7 +26,6 @@
 #include <chrono>
 #include <motion/functions.h>
 #include <touch/functions.h>
-#include <util/find.h>
 
 // Code heavily influenced by PPSSSPP's SceDisplay.cpp
 
@@ -45,7 +44,7 @@ static void vblank_sync_thread(EmuEnvState &emuenv) {
 
             {
                 const std::lock_guard<std::mutex> guard_info(display.display_info_mutex);
-                display.vblank_count++;
+                ++display.vblank_count;
 
                 // in this case, even though no new game frames are being rendered, we still need to update the screen
                 if (emuenv.kernel.is_threads_paused() || (emuenv.common_dialog.status == SCE_COMMON_DIALOG_STATUS_RUNNING))
@@ -61,8 +60,8 @@ static void vblank_sync_thread(EmuEnvState &emuenv) {
             refresh_motion(emuenv.motion, emuenv.ctrl);
 
             // Notify Vblank callback in each VBLANK start
-            for (auto &cb : display.vblank_callbacks)
-                cb.second->event_notify(cb.second->get_notifier_id());
+            for (auto &[_, cb] : display.vblank_callbacks)
+                cb->event_notify(cb->get_notifier_id());
 
             for (std::size_t i = 0; i < display.vblank_wait_infos.size();) {
                 auto &vblank_wait_info = display.vblank_wait_infos[i];
@@ -108,8 +107,7 @@ void wait_vblank(DisplayState &display, KernelState &kernel, const ThreadStatePt
     }
 
     if (is_cb) {
-        for (auto &callback : display.vblank_callbacks) {
-            CallbackPtr &cb = callback.second;
+        for (auto &[_, cb] : display.vblank_callbacks) {
             if (cb->get_owner_thread_id() == wait_thread->id) {
                 std::string name = cb->get_name();
                 cb->execute(kernel, [name]() {

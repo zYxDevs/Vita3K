@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -26,7 +26,6 @@
 #include <config/state.h>
 #include <functional>
 #include <util/log.h>
-#include <util/string_utils.h>
 
 struct FeatureState;
 
@@ -60,7 +59,7 @@ bool wait_cmd(MemState &mem, CommandList &command_list) {
     // we assume here that the cmd starts with a WaitSyncObject
 
     SceGxmSyncObject *sync = reinterpret_cast<Ptr<SceGxmSyncObject> *>(&command_list.first->data[0])->get(mem);
-    const uint32_t timestamp = *reinterpret_cast<uint32_t *>(&command_list.first->data[sizeof(uint32_t) + 2 * sizeof(void *)]);
+    const uint32_t timestamp = *reinterpret_cast<uint32_t *>(&command_list.first->data[sizeof(uint32_t)]);
 
     // wait 500 micro seconds and then return in case should_display is set to true
     return renderer::wishlist(sync, timestamp, 500);
@@ -104,7 +103,7 @@ void process_batch(renderer::State &state, const FeatureState &features, MemStat
             LOG_ERROR("Unimplemented command opcode {}", static_cast<int>(cmd->opcode));
         } else {
             CommandHelper helper(cmd);
-            handler->second(state, mem, config, helper, features, command_list.context, state.cache_path.c_str(), state.title_id, state.self_name);
+            handler->second(state, mem, config, helper, features, command_list.context);
         }
 
         Command *last_cmd = cmd;

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,23 +15,12 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-#pragma once
+#include <module/module.h>
 
-#include <array>
-#include <cstdint>
-#include <string>
+EXPORT(int, SceUlobjDbg_D7F0F610) {
+    return UNIMPLEMENTED();
+}
 
-using Sha256Hash = std::array<uint8_t, 32>;
-
-Sha256Hash sha256(const void *data, size_t size);
-typedef std::array<char, 65> Sha256HashText;
-
-void hex_buf(const std::uint8_t *hash, char *dst, const std::size_t source_size);
-
-template <size_t N>
-const std::string hex_string(const std::array<uint8_t, N> &hash) {
-    std::string dst(2 * N + 1, 0);
-    hex_buf(hash.data(), dst.data(), N);
-
-    return dst;
+EXPORT(int, SceUlobjDbg_F9C0F5DA) {
+    return UNIMPLEMENTED();
 }

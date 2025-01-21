@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -43,8 +43,8 @@ std::vector<T, A> merge_vectors(const std::vector<T, A> &cur, const std::vector<
     return new_vector;
 }
 
-template <typename T, typename A = std::allocator<T>>
-size_t find_index(const std::vector<T, A> &v, const T &value) {
+template <typename T, typename V>
+size_t find_index(const T &v, const V &value) {
     auto it = std::find(v.begin(), v.end(), value);
     if (it != v.end()) {
         // The value was found, return its index
@@ -52,6 +52,33 @@ size_t find_index(const std::vector<T, A> &v, const T &value) {
     } else {
         // The value was not found, return -1
         return -1;
+    }
+}
+
+template <typename T, typename V>
+bool push_if_not_exists(T &v, const V &value) {
+    auto it = std::find(v.begin(), v.end(), value);
+    if (it == v.end()) {
+        v.push_back(value);
+        return false;
+    } else {
+        return true;
+    }
+}
+
+template <typename T, typename V>
+bool contains(const T &v, const V &value) {
+    return std::find(v.begin(), v.end(), value) != v.end();
+}
+
+template <typename T, typename V>
+bool erase_first(T &v, const V &value) {
+    auto it = std::find(v.begin(), v.end(), value);
+    if (it != v.end()) {
+        v.erase(it);
+        return true;
+    } else {
+        return false;
     }
 }
 

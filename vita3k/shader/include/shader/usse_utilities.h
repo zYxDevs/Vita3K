@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,11 +18,8 @@
 #pragma once
 
 #include <SPIRV/SpvBuilder.h>
-#include <shader/usse_program_analyzer.h>
 #include <shader/usse_translator_types.h>
 #include <shader/usse_types.h>
-
-#include <gxm/types.h>
 
 struct FeatureState;
 
@@ -33,10 +30,9 @@ struct SpirvUtilFunctions {
     std::map<DataType, spv::Function *> unpack_funcs;
     std::map<DataType, spv::Function *> pack_funcs;
     spv::Function *fetch_memory{ nullptr };
-    spv::Function *pack_fx8{ nullptr };
-    spv::Function *unpack_fx8{ nullptr };
+    spv::Function *unpack_fx10{ nullptr };
 
-    // buffer_addres_vec[i][1] contains the buffer pointer with an array of vec_i and stride 16 bytes
+    // buffer_address_vec[i][1] contains the buffer pointer with an array of vec_i and stride 16 bytes
     // 0 in the last index is for the read buffer, 1 is for the write buffer
     // this is technically not a function but is the best place to put it
     // buffer_address_vec[0] is for a packed float[] array
@@ -54,13 +50,13 @@ spv::Id unpack_one(spv::Builder &b, SpirvUtilFunctions &utils, const FeatureStat
 spv::Id pack_one(spv::Builder &b, SpirvUtilFunctions &utils, const FeatureState &features, spv::Id vec, const DataType source_type);
 
 spv::Id fetch_memory(spv::Builder &b, const SpirvShaderParameters &params, SpirvUtilFunctions &utils, spv::Id addr);
-void buffer_address_access(spv::Builder &b, const SpirvShaderParameters &params, SpirvUtilFunctions &utils, const FeatureState &features, Operand dest, int dest_offset, spv::Id addr, uint32_t component_size, uint32_t nb_components, bool is_fragment, int buffer_idx = -1, bool is_buffer_store = false);
+void buffer_address_access(spv::Builder &b, const SpirvShaderParameters &params, SpirvUtilFunctions &utils, const FeatureState &features, Operand dest, int dest_offset, spv::Id addr, uint32_t component_size, uint32_t nb_components, int buffer_idx = -1, bool is_buffer_store = false);
 
 spv::Id make_vector_or_scalar_type(spv::Builder &b, spv::Id component, int size);
 
 spv::Id unwrap_type(spv::Builder &b, spv::Id type);
 
-spv::Id convert_to_float(spv::Builder &b, spv::Id opr, DataType type, bool normal);
+spv::Id convert_to_float(spv::Builder &b, const SpirvUtilFunctions &utils, spv::Id opr, DataType type, bool normal);
 spv::Id convert_to_int(spv::Builder &b, const SpirvUtilFunctions &utils, spv::Id opr, DataType type, bool normal);
 
 spv::Id add_uvec2_uint(spv::Builder &b, spv::Id vec, spv::Id to_add);

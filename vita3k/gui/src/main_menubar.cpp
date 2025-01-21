@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,8 +18,6 @@
 #include <config/state.h>
 #include <gui/functions.h>
 #include <io/state.h>
-
-#include <util/string_utils.h>
 
 #include "private.h"
 
@@ -54,9 +52,9 @@ static void draw_file_menu(GuiState &gui, EmuEnvState &emuenv) {
 
 static void draw_emulation_menu(GuiState &gui, EmuEnvState &emuenv) {
     auto &lang = gui.lang.main_menubar.emulation;
-    const ImVec2 VIEWPORT_SIZE(emuenv.viewport_size.x, emuenv.viewport_size.y);
-    const ImVec2 RES_SCALE(VIEWPORT_SIZE.x / emuenv.res_width_dpi_scale, VIEWPORT_SIZE.y / emuenv.res_height_dpi_scale);
-    const ImVec2 SCALE(RES_SCALE.x * emuenv.dpi_scale, RES_SCALE.y * emuenv.dpi_scale);
+    const ImVec2 VIEWPORT_SIZE(emuenv.logical_viewport_size.x, emuenv.logical_viewport_size.y);
+    const ImVec2 RES_SCALE(emuenv.gui_scale.x, emuenv.gui_scale.y);
+    const ImVec2 SCALE(RES_SCALE.x * emuenv.manual_dpi_scale, RES_SCALE.y * emuenv.manual_dpi_scale);
     const ImVec2 ICON_SIZE(56.f * SCALE.x, 56.f * SCALE.y);
     const auto PADDING = 10.f * SCALE.x;
 
@@ -84,8 +82,8 @@ static void draw_emulation_menu(GuiState &gui, EmuEnvState &emuenv) {
         ImGui::SetWindowFontScale(RES_SCALE.x);
         if (ImGui::BeginMenu(lang["last_apps_used"].c_str())) {
             if (!app_list_is_empty) {
-                for (auto i = 0; i < std::min(8, int32_t(gui.time_apps[emuenv.io.user_id].size())); i++) {
-                    const auto time_app = gui.time_apps[emuenv.io.user_id][i];
+                for (size_t i = 0; i < std::min<size_t>(8, gui.time_apps[emuenv.io.user_id].size()); i++) {
+                    const auto &time_app = gui.time_apps[emuenv.io.user_id][i];
                     const auto app_index = get_app_index(gui, time_app.app);
                     if (app_index)
                         draw_app(*app_index);
@@ -105,7 +103,7 @@ static void draw_emulation_menu(GuiState &gui, EmuEnvState &emuenv) {
 
 static void draw_debug_menu(GuiState &gui, DebugMenuState &state) {
     auto &lang = gui.lang.main_menubar.debug;
-    if (ImGui::BeginMenu("Debug")) {
+    if (ImGui::BeginMenu(lang["title"].c_str())) {
         ImGui::MenuItem(lang["threads"].c_str(), nullptr, &state.threads_dialog);
         ImGui::MenuItem(lang["semaphores"].c_str(), nullptr, &state.semaphores_dialog);
         ImGui::MenuItem(lang["mutexes"].c_str(), nullptr, &state.mutexes_dialog);
@@ -154,8 +152,8 @@ static void draw_help_menu(GuiState &gui) {
 
 void draw_main_menu_bar(GuiState &gui, EmuEnvState &emuenv) {
     if (ImGui::BeginMainMenuBar()) {
-        const ImVec2 display_size(emuenv.viewport_size.x, emuenv.viewport_size.y);
-        const ImVec2 RES_SCALE(display_size.x / emuenv.res_width_dpi_scale, display_size.y / emuenv.res_height_dpi_scale);
+        const ImVec2 display_size(emuenv.logical_viewport_size.x, emuenv.logical_viewport_size.y);
+        const ImVec2 RES_SCALE(emuenv.gui_scale.x, emuenv.gui_scale.y);
 
         ImGui::SetWindowFontScale(RES_SCALE.x);
         ImGui::PushStyleColor(ImGuiCol_Text, GUI_COLOR_TEXT_MENUBAR);

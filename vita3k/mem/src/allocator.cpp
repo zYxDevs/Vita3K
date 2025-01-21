@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -58,7 +58,7 @@ int BitmapAllocator::force_fill(const std::uint32_t offset, const int size, cons
             *word = wval & (~mask);
         }
 
-        return std::min<int>(size, static_cast<int>((words.size() << 5) - set_bit));
+        return std::min<int>(size, (words.size() << 5) - set_bit);
     }
 
     // All the bits trails across some other words
@@ -85,7 +85,7 @@ int BitmapAllocator::force_fill(const std::uint32_t offset, const int size, cons
         }
     }
 
-    return std::min<int>(size, static_cast<int>((words.size() << 5) - set_bit));
+    return std::min<int>(size, (words.size() << 5) - set_bit);
 }
 
 void BitmapAllocator::free(const std::uint32_t offset, const int size) {

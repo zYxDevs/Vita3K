@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -198,7 +198,7 @@ bool PCMDecoderState::send(const uint8_t *data, uint32_t size) {
             int32_t hist3 = adpcm_history[ch].hist3;
             int32_t hist4 = adpcm_history[ch].hist4;
 
-            const std::uint8_t *frame = reinterpret_cast<const std::uint8_t *>(data + bytes_per_frame * i);
+            const std::uint8_t *frame = data + bytes_per_frame * i;
 
             std::uint8_t coef_index = (frame[0] >> 4) & 0xf;
             std::uint8_t shift_factor = (frame[0] >> 0) & 0xf;
@@ -261,7 +261,7 @@ bool PCMDecoderState::send(const uint8_t *data, uint32_t size) {
         produced_samples = size / sizeof(std::int16_t) / source_channels;
     }
 
-    // Try to resample if neccessary
+    // Try to resample if necessary
     SwrContext *swr = (source_channels == 2) ? swr_stereo : swr_mono_to_stereo;
 
     const int dest_count = swr_get_out_samples(swr, produced_samples);

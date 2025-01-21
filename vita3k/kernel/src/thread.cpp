@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -21,10 +21,6 @@
 #include <kernel/state.h>
 #include <mem/ptr.h>
 #include <util/align.h>
-
-#include <cpu/functions.h>
-#include <util/find.h>
-#include <util/lock_and_find.h>
 
 #include <util/log.h>
 
@@ -96,13 +92,20 @@ int ThreadState::init(const char *name, Ptr<const void> entry_point, int init_pr
     const Ptr<uint8_t> base_tls_ptr = tls.get_ptr<uint8_t>();
     memset(base_tls_ptr.get(mem), 0, tls_size);
 
+    int *tls_array = tls.get_ptr<int>().get(mem);
+
+    tls_array[TLS_PROCESS_ID] = 1; // stubbed. unused
+    tls_array[TLS_THREAD_ID] = id;
+    tls_array[TLS_SP_TOP] = stack.get();
+    tls_array[TLS_SP_BOTTOM] = stack.get() + stack_size;
+    tls_array[TLS_CURRENT_PRIORITY] = priority;
+    tls_array[TLS_CPU_AFFINITY_MASK] = affinity_mask;
+
+    const Ptr<uint8_t> user_tls_ptr = base_tls_ptr + KERNEL_TLS_SIZE;
+    write_tpidruro(*cpu, user_tls_ptr.address());
     if (kernel.tls_address) {
-        const Ptr<uint8_t> user_tls_ptr = base_tls_ptr + KERNEL_TLS_SIZE;
-        write_tpidruro(*cpu, user_tls_ptr.address());
         assert(kernel.tls_psize <= kernel.tls_msize);
         memcpy(user_tls_ptr.get(mem), kernel.tls_address.get(mem), kernel.tls_psize);
-    } else {
-        write_tpidruro(*cpu, 0);
     }
 
     CPUContext ctx;
@@ -117,7 +120,7 @@ int ThreadState::init(const char *name, Ptr<const void> entry_point, int init_pr
 }
 
 void ThreadState::raise_waiting_threads() {
-    for (auto t : waiting_threads) {
+    for (const auto &t : waiting_threads) {
         const std::unique_lock<std::mutex> lock(t->mutex);
         assert(t->status == ThreadStatus::wait);
         t->status = ThreadStatus::run;
@@ -140,12 +143,9 @@ int ThreadState::start(SceSize arglen, const Ptr<void> argp, bool run_entry_call
 
     // Copy data to stack
     if (argp && arglen > 0) {
-        const Address stack_top = stack.get() + stack_size;
-        const int aligned_size = align(arglen, 8);
-        const Address data_addr = stack_top - aligned_size;
+        const Address data_addr = stack_alloc(*cpu, align(arglen, 8));
         memcpy(Ptr<uint8_t>(data_addr).get(mem), argp.get(mem), arglen);
         write_reg(*cpu, 1, data_addr);
-        write_sp(*cpu, data_addr);
     } else {
         write_reg(*cpu, 1, 0);
     }
@@ -186,6 +186,7 @@ void ThreadState::exit_delete(bool exit) {
 bool ThreadState::run_loop() {
     int res = 0;
     int run_level = std::max(call_level, 1);
+
     std::unique_lock<std::mutex> lock(mutex);
 
     auto run_thread_end_callback = [&]() {
@@ -303,7 +304,7 @@ bool ThreadState::run_loop() {
     }
 }
 
-void ThreadState::push_arguments(Address callback_address, const std::vector<uint32_t> &args) {
+void ThreadState::push_arguments(const std::vector<uint32_t> &args) {
     Address sp = read_sp(*cpu);
     for (size_t i = 0; i < std::min(args.size(), static_cast<size_t>(4)); i++) {
         write_reg(*cpu, i, args[i]);
@@ -332,10 +333,10 @@ uint32_t ThreadState::run_callback(Address callback_address, const std::vector<u
     // we shouldn't have to clean the context I believe
     write_pc(*cpu, callback_address);
     write_lr(*cpu, cpu->halt_instruction_pc);
-    push_arguments(callback_address, args);
+    push_arguments(args);
     thread_lock.unlock();
 
-    // unlock but then immediatly lock back in the run_loop function
+    // unlock but then immediately lock back in the run_loop function
     // shouldn't cause an issue, but maybe we could use a recursive mutex instead
     run_loop();
 
@@ -415,10 +416,12 @@ std::string ThreadState::log_stack_traceback() const {
     std::stringstream ss;
     const Address sp = read_sp(*cpu);
     for (Address addr = sp - START_OFFSET; addr <= sp + END_OFFSET; addr += 4) {
-        const Address value = *Ptr<uint32_t>(addr).get(mem);
-        const auto mod = kernel.find_module_by_addr(value);
-        if (mod)
-            ss << fmt::format("{} (module: {})\n", log_hex(value), mod->module_name);
+        if (Ptr<uint32_t>(addr).valid(mem)) {
+            const Address value = *Ptr<uint32_t>(addr).get(mem);
+            const auto mod = kernel.find_module_by_addr(value);
+            if (mod)
+                ss << fmt::format("{} (module: {})\n", log_hex(value), mod->module_name);
+        }
     }
     return ss.str();
 }

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,15 +19,13 @@
 
 #include <app/functions.h>
 #include <compat/functions.h>
-#include <config/functions.h>
 #include <config/state.h>
 #include <ctrl/ctrl.h>
+#include <dialog/state.h>
 #include <display/state.h>
 #include <gui/functions.h>
 #include <io/state.h>
 #include <kernel/state.h>
-
-#include <io/VitaIoDevice.h>
 
 #include <util/log.h>
 #include <util/safe_time.h>
@@ -48,7 +46,7 @@ void init_user_apps(GuiState &gui, EmuEnvState &emuenv) {
         gui.app_selector.icon_async_loader->quit = true;
 
     std::thread init_apps([&gui, &emuenv]() {
-        auto app_list_size = gui.app_selector.user_apps.size();
+        auto apps_list_size = gui.app_selector.user_apps.size();
         gui.app_selector.user_apps.clear();
         get_user_apps_title(gui, emuenv);
 
@@ -59,19 +57,20 @@ void init_user_apps(GuiState &gui, EmuEnvState &emuenv) {
         init_last_time_apps(gui, emuenv);
         load_and_update_compat_user_apps(gui, emuenv);
 
+        const auto new_apps_list_size = gui.app_selector.user_apps.size();
         init_apps_icon(gui, emuenv, gui.app_selector.user_apps);
 
-        if (app_list_size == gui.app_selector.user_apps.size())
+        if (apps_list_size == new_apps_list_size)
             return false;
 
         std::string change_app_list = "new application(s) added";
-        if (app_list_size > gui.app_selector.user_apps.size()) {
+        if (apps_list_size > new_apps_list_size) {
             change_app_list = "application(s) removed";
-            app_list_size -= gui.app_selector.user_apps.size();
+            apps_list_size -= new_apps_list_size;
         } else
-            app_list_size = gui.app_selector.user_apps.size() - app_list_size;
+            apps_list_size = new_apps_list_size - apps_list_size;
 
-        LOG_INFO("{} {}", app_list_size, change_app_list);
+        LOG_INFO("{} {}", apps_list_size, change_app_list);
 
         return true;
     });
@@ -115,7 +114,7 @@ void update_live_area_current_open_apps_list(GuiState &gui, EmuEnvState &emuenv,
         gui.live_area_current_open_apps_list.insert(gui.live_area_current_open_apps_list.begin(), app_path);
     gui.live_area_app_current_open = 0;
     if (gui.live_area_current_open_apps_list.size() > 6) {
-        const auto last_app = gui.live_area_current_open_apps_list.back() == emuenv.io.app_path ? gui.live_area_current_open_apps_list[gui.live_area_current_open_apps_list.size() - 2] : gui.live_area_current_open_apps_list.back();
+        const auto &last_app = gui.live_area_current_open_apps_list.back() == emuenv.io.app_path ? gui.live_area_current_open_apps_list[gui.live_area_current_open_apps_list.size() - 2] : gui.live_area_current_open_apps_list.back();
         gui.live_area_contents.erase(last_app);
         gui.live_items.erase(last_app);
         gui.live_area_current_open_apps_list.erase(get_live_area_current_open_apps_list_index(gui, last_app));
@@ -217,28 +216,28 @@ void close_system_app(GuiState &gui, EmuEnvState &emuenv) {
     }
 }
 
-void close_and_run_new_app(GuiState &gui, EmuEnvState &emuenv, const std::string &app_path) {
+void close_and_run_new_app(EmuEnvState &emuenv, const std::string &app_path) {
     emuenv.kernel.exit_delete_all_threads();
     emuenv.load_app_path = app_path;
     emuenv.load_exec = true;
 }
 
 void draw_app_close(GuiState &gui, EmuEnvState &emuenv) {
-    const ImVec2 display_size(emuenv.viewport_size.x, emuenv.viewport_size.y);
-    const auto RES_SCALE = ImVec2(display_size.x / emuenv.res_width_dpi_scale, display_size.y / emuenv.res_height_dpi_scale);
-    const auto SCALE = ImVec2(RES_SCALE.x * emuenv.dpi_scale, RES_SCALE.y * emuenv.dpi_scale);
+    const ImVec2 display_size(emuenv.logical_viewport_size.x, emuenv.logical_viewport_size.y);
+    const auto RES_SCALE = ImVec2(emuenv.gui_scale.x, emuenv.gui_scale.y);
+    const auto SCALE = ImVec2(RES_SCALE.x * emuenv.manual_dpi_scale, RES_SCALE.y * emuenv.manual_dpi_scale);
 
     const auto WINDOW_SIZE = ImVec2(756.0f * SCALE.x, 436.0f * SCALE.y);
     const auto BUTTON_SIZE = ImVec2(320.f * SCALE.x, 46.f * SCALE.y);
 
-    auto common = emuenv.common_dialog.lang.common;
+    auto &common = emuenv.common_dialog.lang.common;
 
-    ImGui::SetNextWindowPos(ImVec2(emuenv.viewport_pos.x, emuenv.viewport_pos.y), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(emuenv.logical_viewport_pos.x, emuenv.logical_viewport_pos.y), ImGuiCond_Always);
     ImGui::SetNextWindowSize(display_size, ImGuiCond_Always);
     ImGui::Begin("##app_close", &gui.vita_area.app_close, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings);
-    ImGui::SetNextWindowPos(ImVec2(emuenv.viewport_pos.x + (display_size.x / 2.f) - (WINDOW_SIZE.x / 2.f), emuenv.viewport_pos.y + (display_size.y / 2.f) - (WINDOW_SIZE.y / 2.f)), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(emuenv.logical_viewport_pos.x + (display_size.x / 2.f) - (WINDOW_SIZE.x / 2.f), emuenv.logical_viewport_pos.y + (display_size.y / 2.f) - (WINDOW_SIZE.y / 2.f)), ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.f * SCALE.x);
-    ImGui::BeginChild("##app_close_child", WINDOW_SIZE, true, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings);
+    ImGui::BeginChild("##app_close_child", WINDOW_SIZE, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings);
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 10.f * SCALE.x);
 
     const auto ICON_SIZE = ImVec2(64.f * SCALE.x, 64.f * SCALE.y);
@@ -259,8 +258,8 @@ void draw_app_close(GuiState &gui, EmuEnvState &emuenv) {
         gui.vita_area.app_close = false;
     ImGui::SameLine(0, 20.f * SCALE.x);
     if (ImGui::Button(common["ok"].c_str(), BUTTON_SIZE)) {
-        const auto app_path = gui.vita_area.live_area_screen ? gui.live_area_current_open_apps_list[gui.live_area_app_current_open] : emuenv.app_path;
-        close_and_run_new_app(gui, emuenv, app_path);
+        const auto &app_path = gui.vita_area.live_area_screen ? gui.live_area_current_open_apps_list[gui.live_area_app_current_open] : emuenv.app_path;
+        close_and_run_new_app(emuenv, app_path);
     }
     ImGui::PopStyleVar();
     ImGui::EndChild();
@@ -353,6 +352,7 @@ static void sort_app_list(GuiState &gui, EmuEnvState &emuenv, const SortType &ty
             case DESCENDANT:
                 return lhs.app_ver > rhs.app_ver;
             }
+            break;
         case CATEGORY:
             switch (sorted) {
             case ASCENDANT:
@@ -360,6 +360,7 @@ static void sort_app_list(GuiState &gui, EmuEnvState &emuenv, const SortType &ty
             case DESCENDANT:
                 return lhs.category > rhs.category;
             }
+            break;
         case COMPAT:
             switch (sorted) {
             case ASCENDANT:
@@ -367,6 +368,7 @@ static void sort_app_list(GuiState &gui, EmuEnvState &emuenv, const SortType &ty
             case DESCENDANT:
                 return lhs.compat > rhs.compat;
             }
+            break;
         case LAST_TIME:
             switch (sorted) {
             case ASCENDANT:
@@ -374,6 +376,7 @@ static void sort_app_list(GuiState &gui, EmuEnvState &emuenv, const SortType &ty
             case DESCENDANT:
                 return lhs.last_time < rhs.last_time;
             }
+            break;
         case TITLE:
             switch (sorted) {
             case ASCENDANT:
@@ -381,6 +384,7 @@ static void sort_app_list(GuiState &gui, EmuEnvState &emuenv, const SortType &ty
             case DESCENDANT:
                 return string_utils::toupper(lhs.title) > string_utils::toupper(rhs.title);
             }
+            break;
         case TITLE_ID:
             switch (sorted) {
             case ASCENDANT:
@@ -388,6 +392,7 @@ static void sort_app_list(GuiState &gui, EmuEnvState &emuenv, const SortType &ty
             case DESCENDANT:
                 return lhs.title_id > rhs.title_id;
             }
+            break;
         }
         return false;
     });
@@ -415,8 +420,9 @@ static std::string get_label_name(GuiState &gui, const SortType &type) {
     return label;
 }
 
-static int32_t first_visible_app_index = -4, current_selected_app_index = -5;
-static std::vector<int32_t> apps_list_filtered;
+static std::string first_visible_app, current_selected_app;
+
+static std::vector<std::string> apps_list_filtered;
 void browse_home_apps_list(GuiState &gui, EmuEnvState &emuenv, const uint32_t button) {
     if (apps_list_filtered.empty())
         return;
@@ -426,8 +432,8 @@ void browse_home_apps_list(GuiState &gui, EmuEnvState &emuenv, const uint32_t bu
         gui.is_nav_button = true;
 
         // When the current selected app index have not any selected, set it to the first visible app index
-        if (current_selected_app_index < -4)
-            current_selected_app_index = first_visible_app_index;
+        if (current_selected_app.empty())
+            current_selected_app = first_visible_app;
 
         return;
     }
@@ -435,15 +441,14 @@ void browse_home_apps_list(GuiState &gui, EmuEnvState &emuenv, const uint32_t bu
     const auto apps_list_filtered_size = static_cast<int32_t>(apps_list_filtered.size() - 1);
 
     // Find current selected app index in apps list filtered
-    auto apps_list_filtered_index = std::find(apps_list_filtered.begin(), apps_list_filtered.end(), current_selected_app_index);
-    if (apps_list_filtered_index == apps_list_filtered.end()) {
-        current_selected_app_index = first_visible_app_index;
+    const int32_t current_selected_app_index = vector_utils::find_index(apps_list_filtered, current_selected_app);
+    if (current_selected_app_index == -1) {
+        current_selected_app = first_visible_app;
         return;
     }
 
-    const auto filtered_index = static_cast<int32_t>(std::distance(apps_list_filtered.begin(), apps_list_filtered_index));
-    const auto prev_filtered_index = apps_list_filtered[std::max(filtered_index - 1, 0)];
-    const auto next_filtered_index = apps_list_filtered[std::min(filtered_index + 1, apps_list_filtered_size)];
+    const auto prev_filtered_app = apps_list_filtered[std::max(current_selected_app_index - 1, 0)];
+    const auto next_filtered_app = apps_list_filtered[std::min(current_selected_app_index + 1, apps_list_filtered_size)];
 
     const auto switch_to_first_live_area_open_app = [&gui]() {
         if (!gui.live_area_current_open_apps_list.empty()) {
@@ -456,30 +461,30 @@ void browse_home_apps_list(GuiState &gui, EmuEnvState &emuenv, const uint32_t bu
     switch (button) {
     case SCE_CTRL_UP:
         if (emuenv.cfg.apps_list_grid) {
-            if (filtered_index >= 4)
-                current_selected_app_index = apps_list_filtered[filtered_index - 4];
+            if (current_selected_app_index >= 4)
+                current_selected_app = apps_list_filtered[current_selected_app_index - 4];
         } else
-            current_selected_app_index = prev_filtered_index;
+            current_selected_app = prev_filtered_app;
         break;
     case SCE_CTRL_RIGHT:
         if (emuenv.cfg.apps_list_grid) {
-            if (((filtered_index + 1) % 4 == 0) || (filtered_index == apps_list_filtered_size))
+            if (((current_selected_app_index + 1) % 4 == 0) || (current_selected_app_index == apps_list_filtered_size))
                 switch_to_first_live_area_open_app();
             else
-                current_selected_app_index = next_filtered_index;
+                current_selected_app = next_filtered_app;
         } else
             switch_to_first_live_area_open_app();
         break;
     case SCE_CTRL_DOWN:
         if (emuenv.cfg.apps_list_grid) {
-            if ((filtered_index + 4) <= apps_list_filtered_size)
-                current_selected_app_index = apps_list_filtered[filtered_index + 4];
+            if ((current_selected_app_index + 4) <= apps_list_filtered_size)
+                current_selected_app = apps_list_filtered[current_selected_app_index + 4];
         } else
-            current_selected_app_index = next_filtered_index;
+            current_selected_app = next_filtered_app;
         break;
     case SCE_CTRL_LEFT:
-        if (emuenv.cfg.apps_list_grid && (filtered_index % 4 != 0))
-            current_selected_app_index = prev_filtered_index;
+        if (emuenv.cfg.apps_list_grid && (current_selected_app_index % 4 != 0))
+            current_selected_app = prev_filtered_app;
         break;
     case SCE_CTRL_R1:
         gui.live_area_app_current_open = std::min(gui.live_area_app_current_open + 1, static_cast<int32_t>(gui.live_area_current_open_apps_list.size() - 1));
@@ -487,29 +492,41 @@ void browse_home_apps_list(GuiState &gui, EmuEnvState &emuenv, const uint32_t bu
         gui.vita_area.home_screen = !gui.vita_area.live_area_screen;
         break;
     case SCE_CTRL_CIRCLE:
-        if (emuenv.cfg.sys_button == 0) {
-            const auto &selected_app = current_selected_app_index < 0 ? gui.app_selector.sys_apps[current_selected_app_index + 4] : gui.app_selector.user_apps[current_selected_app_index];
-            pre_load_app(gui, emuenv, emuenv.cfg.show_live_area_screen, selected_app.path);
-        }
+        if (emuenv.cfg.sys_button == 0)
+            pre_load_app(gui, emuenv, emuenv.cfg.show_live_area_screen, current_selected_app);
         break;
     case SCE_CTRL_CROSS:
-        if (emuenv.cfg.sys_button == 1) {
-            const auto &selected_app = current_selected_app_index < 0 ? gui.app_selector.sys_apps[current_selected_app_index + 4] : gui.app_selector.user_apps[current_selected_app_index];
-            pre_load_app(gui, emuenv, emuenv.cfg.show_live_area_screen, selected_app.path);
-        }
+        if (emuenv.cfg.sys_button == 1)
+            pre_load_app(gui, emuenv, emuenv.cfg.show_live_area_screen, current_selected_app);
         break;
     default: break;
     }
 }
 
-static const ImU32 ARROW_COLOR = 0xFFFFFFFF; // White
-static float scroll_type, current_scroll_pos, max_scroll_pos;
+static std::string selected_app;
+void select_app(GuiState &gui, const std::string &title_id) {
+    // Find the app in the user apps list
+    auto app_it = std::find_if(gui.app_selector.user_apps.begin(), gui.app_selector.user_apps.end(), [&](const App &app) {
+        return app.title_id == title_id;
+    });
+
+    // Check if the app was found
+    if (app_it != gui.app_selector.user_apps.end()) {
+        // Set the selected app
+        current_selected_app = selected_app = title_id;
+        gui.is_nav_button = true;
+    } else
+        LOG_ERROR("App with title id {} not found", title_id);
+}
 
 void draw_home_screen(GuiState &gui, EmuEnvState &emuenv) {
-    const ImVec2 VIEWPORT_POS(emuenv.viewport_pos.x, emuenv.viewport_pos.y);
-    const ImVec2 VIEWPORT_SIZE(emuenv.viewport_size.x, emuenv.viewport_size.y);
-    const ImVec2 VIEWPORT_RES_SCALE(VIEWPORT_SIZE.x / emuenv.res_width_dpi_scale, VIEWPORT_SIZE.y / emuenv.res_height_dpi_scale);
-    const ImVec2 VIEWPORT_SCALE(VIEWPORT_RES_SCALE.x * emuenv.dpi_scale, VIEWPORT_RES_SCALE.y * emuenv.dpi_scale);
+    constexpr ImU32 ARROW_COLOR = 0xFFFFFFFF; // White
+    static int scroll_type;
+
+    const ImVec2 VIEWPORT_POS(emuenv.logical_viewport_pos.x, emuenv.logical_viewport_pos.y);
+    const ImVec2 VIEWPORT_SIZE(emuenv.logical_viewport_size.x, emuenv.logical_viewport_size.y);
+    const ImVec2 VIEWPORT_RES_SCALE(emuenv.gui_scale.x, emuenv.gui_scale.y);
+    const ImVec2 VIEWPORT_SCALE(VIEWPORT_RES_SCALE.x * emuenv.manual_dpi_scale, VIEWPORT_RES_SCALE.y * emuenv.manual_dpi_scale);
     const auto INFORMATION_BAR_HEIGHT = 32.f * VIEWPORT_SCALE.y;
 
     // Clear apps list filtered
@@ -652,8 +669,10 @@ void draw_home_screen(GuiState &gui, EmuEnvState &emuenv) {
     }
     if (ImGui::BeginPopup("app_filter")) {
         ImGui::PushStyleColor(ImGuiCol_Text, GUI_COLOR_TEXT);
-        if (ImGui::MenuItem(lang["all"].c_str(), nullptr, app_region == ALL && app_compat_state == ALL_COMPAT_STATE))
-            app_region = AppRegion::ALL, app_compat_state = ALL_COMPAT_STATE;
+        if (ImGui::MenuItem(lang["all"].c_str(), nullptr, app_region == ALL && app_compat_state == ALL_COMPAT_STATE)) {
+            app_region = AppRegion::ALL;
+            app_compat_state = ALL_COMPAT_STATE;
+        }
         if (ImGui::BeginMenu(lang["by_region"].c_str())) {
             ImGui::SetWindowFontScale(1.1f * VIEWPORT_RES_SCALE.x);
             if (ImGui::MenuItem(lang["usa"].c_str(), nullptr, app_region == USA))
@@ -678,7 +697,7 @@ void draw_home_screen(GuiState &gui, EmuEnvState &emuenv) {
             ImGui::SetWindowFontScale(1.1f * VIEWPORT_RES_SCALE.x);
             if (ImGui::MenuItem(lang["all"].c_str(), nullptr, app_compat_state == ALL_COMPAT_STATE))
                 app_compat_state = ALL_COMPAT_STATE;
-            auto lang_compat = gui.lang.compatibility.states;
+            auto &lang_compat = gui.lang.compatibility.states;
             for (int32_t i = compat::UNKNOWN; i <= compat::PLAYABLE; i++) {
                 const auto compat_state = static_cast<compat::CompatibilityState>(i);
                 ImGui::PushStyleColor(ImGuiCol_Text, gui.compat.compat_color[compat_state]);
@@ -711,12 +730,12 @@ void draw_home_screen(GuiState &gui, EmuEnvState &emuenv) {
     auto child_flags = ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
     if (gui.is_nav_button)
         child_flags |= ImGuiWindowFlags_NoMouseInputs;
-    ImGui::SetNextWindowPos(emuenv.cfg.apps_list_grid ? POS_APP_LIST : ImVec2(emuenv.viewport_pos.x, VIEWPORT_POS.y + MARGIN_HEIGHT), ImGuiCond_Always);
-    ImGui::BeginChild("##apps_list", SIZE_APP_LIST, false, child_flags);
+    ImGui::SetNextWindowPos(emuenv.cfg.apps_list_grid ? POS_APP_LIST : ImVec2(emuenv.logical_viewport_pos.x, VIEWPORT_POS.y + MARGIN_HEIGHT), ImGuiCond_Always);
+    ImGui::BeginChild("##apps_list", SIZE_APP_LIST, ImGuiChildFlags_None, child_flags);
 
     // Get Scroll Pos
-    current_scroll_pos = ImGui::GetScrollY();
-    max_scroll_pos = ImGui::GetScrollMaxY();
+    float current_scroll_pos = ImGui::GetScrollY();
+    float max_scroll_pos = ImGui::GetScrollMaxY();
 
     // Set Scroll Pos
     if (scroll_type != 0) {
@@ -748,11 +767,10 @@ void draw_home_screen(GuiState &gui, EmuEnvState &emuenv) {
     ImGui::SetWindowFontScale(1.1f);
     ImGui::PushStyleColor(ImGuiCol_Text, GUI_COLOR_TEXT);
 
-    std::vector<int32_t> visible_apps{};
+    std::vector<std::string> visible_apps{};
 
     const auto display_app = [&](const std::vector<gui::App> &apps_list, std::map<std::string, ImGui_Texture> &apps_icon) {
         for (const auto &app : apps_list) {
-            bool selected = false;
             const auto is_sys = app.path.starts_with("NPXS") && (app.path != "NPXS10007");
 
             if (!is_sys) {
@@ -779,18 +797,17 @@ void draw_home_screen(GuiState &gui, EmuEnvState &emuenv) {
                 ImGui::SetCursorPosX(GRID_ICON_POS);
 
             // Get the current app index off the apps list.
-            const auto app_index = static_cast<int>(&app - &apps_list[0]);
-            const auto current_app_index = !is_sys ? app_index : app_index - 4;
-            apps_list_filtered.push_back(current_app_index);
+            apps_list_filtered.push_back(app.path);
 
             // Check if the current app is selected.
-            const auto is_app_selected = gui.is_nav_button && (current_selected_app_index == current_app_index);
-
+            const auto is_current_app_selected = gui.is_nav_button && (current_selected_app == app.path);
             const auto icon_flags = emuenv.cfg.apps_list_grid ? ImGuiSelectableFlags_None : ImGuiSelectableFlags_SpanAllColumns;
-            if (ImGui::Selectable("##icon", selected || is_app_selected, icon_flags, SELECTABLE_APP_SIZE))
-                selected = true;
+            if (ImGui::Selectable("##icon", is_current_app_selected || (selected_app == app.path), icon_flags, SELECTABLE_APP_SIZE)) {
+                selected_app.clear();
+                pre_load_app(gui, emuenv, emuenv.cfg.show_live_area_screen, app.path);
+            }
 
-            if (!gui.configuration_menu.custom_settings_dialog && (ImGui::IsItemHovered() || is_app_selected))
+            if (!gui.configuration_menu.custom_settings_dialog && (ImGui::IsItemHovered() || is_current_app_selected))
                 emuenv.app_path = app.path;
             if (emuenv.app_path == app.path)
                 draw_app_context_menu(gui, emuenv, app.path);
@@ -808,7 +825,7 @@ void draw_home_screen(GuiState &gui, EmuEnvState &emuenv) {
             const auto element_is_within_visible_area = (MIN_ITEM_RECT_MAX >= POS_APP_LIST.y) && (item_rect_min <= MAX_LIST_POS);
 
             // When the app is selected.
-            if (is_app_selected) {
+            if (is_current_app_selected) {
                 // Scroll to the app position when it is not visible.
                 if (item_rect_min < POS_APP_LIST.y)
                     ImGui::SetScrollHereY(0.f);
@@ -825,11 +842,11 @@ void draw_home_screen(GuiState &gui, EmuEnvState &emuenv) {
             // Draw the app icons and custom config button only when they are within the visible area.
             if (element_is_within_visible_area) {
                 // Add the current app index to the visible apps list.
-                visible_apps.push_back(current_app_index);
+                visible_apps.push_back(app.path);
 
                 // Set the current selected app index to the current app index when the app is hovered.
                 if (!gui.is_nav_button && ImGui::IsItemHovered())
-                    current_selected_app_index = current_app_index;
+                    current_selected_app = app.path;
 
                 // Draw the app icon
                 if (apps_icon.contains(app.path)) {
@@ -847,14 +864,14 @@ void draw_home_screen(GuiState &gui, EmuEnvState &emuenv) {
                 if (IS_CUSTOM_CONFIG) {
                     if (emuenv.cfg.apps_list_grid)
                         ImGui::SetCursorPosX(GRID_ICON_POS);
-                    ImGui::SetCursorPosY(POS_ICON.y + ICON_SIZE.y - ImGui::GetFontSize() - (7.8f * emuenv.dpi_scale));
+                    ImGui::SetCursorPosY(POS_ICON.y + ICON_SIZE.y - ImGui::GetFontSize() - (7.8f * emuenv.manual_dpi_scale));
                     ImGui::PushStyleColor(ImGuiCol_Text, GUI_COLOR_TEXT_TITLE);
                     ImGui::Button("CC", ImVec2(40.f * VIEWPORT_SCALE.x, 0.f));
                     ImGui::PopStyleColor();
                 }
-            } else if (!gui.is_nav_button && (current_selected_app_index == current_app_index)) {
+            } else if (!gui.is_nav_button && (current_selected_app == app.path)) {
                 // When the app is selected but not visible, reset the current selected app index.
-                current_selected_app_index = -5;
+                current_selected_app.clear();
             }
 
             if (!emuenv.cfg.apps_list_grid)
@@ -863,7 +880,7 @@ void draw_home_screen(GuiState &gui, EmuEnvState &emuenv) {
             // Draw the compatibility badge for commercial apps when they are within the visible area.
             if (element_is_within_visible_area && (app.title_id.starts_with("PCS") || (app.title_id == "NPXS10007"))) {
                 const auto compat_state = (gui.compat.compat_db_loaded ? gui.compat.app_compat_db.contains(app.title_id) : false) ? gui.compat.app_compat_db[app.title_id].state : compat::UNKNOWN;
-                const auto compat_state_vec4 = gui.compat.compat_color[compat_state];
+                const auto &compat_state_vec4 = gui.compat.compat_color[compat_state];
                 const ImU32 compat_state_color = IM_COL32((int)(compat_state_vec4.x * 255.0f), (int)(compat_state_vec4.y * 255.0f), (int)(compat_state_vec4.z * 255.0f), (int)(compat_state_vec4.w * 255.0f));
                 const auto current_pos = ImGui::GetCursorPos();
                 const auto grid_compat_padding = 4.f * VIEWPORT_SCALE.x;
@@ -907,8 +924,6 @@ void draw_home_screen(GuiState &gui, EmuEnvState &emuenv) {
                 ImGui::PopTextWrapPos();
             }
             ImGui::NextColumn();
-            if (selected)
-                pre_load_app(gui, emuenv, emuenv.cfg.show_live_area_screen, app.path);
             ImGui::PopID();
         }
     };
@@ -925,9 +940,9 @@ void draw_home_screen(GuiState &gui, EmuEnvState &emuenv) {
     ImGui::SetWindowFontScale(1.f);
     ImGui::EndChild();
 
-    // When visible apps list is not empty, set first visible app index to 0
+    // When visible apps list is not empty, set first visible app
     if (!visible_apps.empty())
-        first_visible_app_index = visible_apps.front();
+        first_visible_app = visible_apps.front();
 
     const auto SELECTABLE_SIZE = ImVec2(50.f * VIEWPORT_SCALE.x, 60.f * VIEWPORT_SCALE.y);
 

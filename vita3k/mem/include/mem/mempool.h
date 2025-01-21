@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,6 +19,8 @@
 
 #include <mem/ptr.h>
 #include <util/align.h>
+
+#include <algorithm>
 
 struct MemspaceBlockAllocator {
     struct Block {
@@ -44,7 +46,7 @@ struct MemspaceBlockAllocator {
     }
 
     std::uint32_t alloc(const std::uint32_t size) {
-        std::uint32_t aligned_size = static_cast<std::uint32_t>(align(size, 4));
+        std::uint32_t aligned_size = align(size, 4);
         for (std::size_t i = 0; i < blocks.size(); i++) {
             if (blocks[i].free && blocks[i].size >= aligned_size) {
                 // Case 1: Equals. Assign it and returns

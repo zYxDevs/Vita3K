@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,36 +17,26 @@
 
 #pragma once
 
-#include <crypto/hash.h>
-#include <glutil/object.h>
-#include <glutil/object_array.h>
 #include <gxm/types.h>
 #include <renderer/commands.h>
 #include <renderer/gxm_types.h>
 #include <shader/spirv_recompiler.h>
 #include <shader/usse_program_analyzer.h>
+#include <util/hash.h>
 
 #include <array>
-#include <bit>
 #include <bitset>
 #include <map>
-#include <string>
-#include <thread>
-#include <tuple>
 #include <vector>
 
 static constexpr auto DEFAULT_RES_WIDTH = 960;
 static constexpr auto DEFAULT_RES_HEIGHT = 544;
 
 struct SceGxmProgram;
-struct SDL_Window;
 
 using UniformBufferSizes = std::array<std::uint32_t, 15>;
 
 namespace renderer {
-
-typedef std::tuple<Sha256Hash, Sha256Hash> ProgramHashes;
-typedef std::vector<std::string> ExcludedUniforms; // vector instead of unordered_set since it's much faster for few elements
 
 // State types
 typedef std::map<Sha256Hash, const SceGxmProgram *> GXPPtrMap;
@@ -55,8 +45,6 @@ struct UniformSetRequest {
     const SceGxmProgramParameter *parameter;
     const void *data;
 };
-
-struct CommandBuffer;
 
 enum class Backend : uint32_t {
     OpenGL,
@@ -92,7 +80,7 @@ struct GXMStreamInfo {
     size_t size = 0;
 };
 
-// We seperate the following two parts of the stencil state because the first is part of the pipeline creation
+// We separate the following two parts of the stencil state because the first is part of the pipeline creation
 // while the second is dynamic
 struct GxmStencilStateOp {
     SceGxmStencilFunc func = SCE_GXM_STENCIL_FUNC_ALWAYS;

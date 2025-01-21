@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -24,17 +24,10 @@
 
 #include <emuenv/state.h>
 
-#include <functional>
-#include <string>
-#include <vector>
-
 // TODO: remove
 #include <util/fs.h>
 
-struct SfoFile;
+#include <functional>
+#include <string>
 
-void install_pup(const std::wstring &pref_path, const std::string &pup_path, const std::function<void(uint32_t)> &progress_callback = nullptr);
-
-bool create_license(EmuEnvState &emuenv, const std::string &zRIF);
-bool copy_license(EmuEnvState &emuenv, const fs::path &license_path);
-int32_t get_license_sku_flag(EmuEnvState &emuenv, const std::string &content_id);
+std::string install_pup(const fs::path &pref_path, const fs::path &pup_path, const std::function<void(uint32_t)> &progress_callback = nullptr);

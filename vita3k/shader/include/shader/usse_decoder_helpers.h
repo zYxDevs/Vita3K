@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,8 +19,7 @@
 
 #include <shader/usse_types.h>
 
-namespace shader {
-namespace usse {
+namespace shader::usse {
 
 //
 // Decoder helpers
@@ -41,5 +40,4 @@ usse::Operand &decode_src12(usse::Operand &src, usse::Imm6 src_n, usse::Imm2 src
 usse::Operand &decode_src0(usse::Operand &src, usse::Imm6 src_n, usse::Imm1 src_bank_sel, usse::Imm1 src_bank_ext, bool is_double_regs, uint8_t reg_bits,
     bool is_second_program);
 
-} // namespace usse
-} // namespace shader
+} // namespace shader::usse

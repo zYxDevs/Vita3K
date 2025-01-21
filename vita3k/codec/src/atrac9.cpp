@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -29,7 +29,7 @@ extern "C" {
 
 #include <util/log.h>
 
-#include <cassert>
+#include <algorithm>
 
 struct FFMPEGAtrac9Info {
     uint32_t version;
@@ -38,11 +38,12 @@ struct FFMPEGAtrac9Info {
 };
 
 uint32_t Atrac9DecoderState::get(DecoderQuery query) {
-    Atrac9CodecInfo *info = reinterpret_cast<Atrac9CodecInfo *>(atrac9_info);
+    Atrac9CodecInfo *info = static_cast<Atrac9CodecInfo *>(atrac9_info);
 
     switch (query) {
     case DecoderQuery::CHANNELS: return info->channels;
-    case DecoderQuery::BIT_RATE: return 0;
+    // The bit rate is the size of a superframe times the number of superframes per second (times 8)
+    case DecoderQuery::BIT_RATE: return static_cast<uint32_t>((info->superframeSize * 8ULL * info->samplingRate) / (info->frameSamples * info->framesInSuperframe));
     case DecoderQuery::SAMPLE_RATE: return info->samplingRate;
     case DecoderQuery::AT9_SAMPLE_PER_FRAME: return info->frameSamples;
     case DecoderQuery::AT9_SAMPLE_PER_SUPERFRAME: return info->frameSamples * info->framesInSuperframe;
@@ -57,11 +58,11 @@ uint32_t Atrac9DecoderState::get_es_size() {
 }
 
 void Atrac9DecoderState::flush() {
-    Atrac9CodecInfo *info = reinterpret_cast<Atrac9CodecInfo *>(atrac9_info);
+    Atrac9CodecInfo *info = static_cast<Atrac9CodecInfo *>(atrac9_info);
     superframe_frame_idx = 0;
     superframe_data_left = info->superframeSize;
 
-    Frame &frame = reinterpret_cast<Atrac9Handle *>(decoder_handle)->Frame;
+    Frame &frame = static_cast<Atrac9Handle *>(decoder_handle)->Frame;
     frame.IndexInSuperframe = 0;
     if (frame.Channels[0])
         std::fill_n(frame.Channels[0]->Mdct.ImdctPrevious, 256, 0.0);
@@ -70,7 +71,7 @@ void Atrac9DecoderState::flush() {
 }
 
 void Atrac9DecoderState::export_state(Atrac9DecoderSavedState *dest) {
-    Frame &frame = reinterpret_cast<Atrac9Handle *>(decoder_handle)->Frame;
+    Frame &frame = static_cast<Atrac9Handle *>(decoder_handle)->Frame;
     if (frame.Channels[0])
         std::copy_n(frame.Channels[0]->Mdct.ImdctPrevious, 256, dest->prev_values[0]);
     if (frame.Channels[1])
@@ -78,7 +79,7 @@ void Atrac9DecoderState::export_state(Atrac9DecoderSavedState *dest) {
 }
 
 void Atrac9DecoderState::load_state(const Atrac9DecoderSavedState *src) {
-    Frame &frame = reinterpret_cast<Atrac9Handle *>(decoder_handle)->Frame;
+    Frame &frame = static_cast<Atrac9Handle *>(decoder_handle)->Frame;
     if (frame.Channels[0])
         std::copy_n(src->prev_values[0], 256, frame.Channels[0]->Mdct.ImdctPrevious);
     if (frame.Channels[1])
@@ -86,13 +87,13 @@ void Atrac9DecoderState::load_state(const Atrac9DecoderSavedState *src) {
 }
 
 bool Atrac9DecoderState::send(const uint8_t *data, uint32_t size) {
-    Atrac9CodecInfo *info = reinterpret_cast<Atrac9CodecInfo *>(atrac9_info);
+    Atrac9CodecInfo *info = static_cast<Atrac9CodecInfo *>(atrac9_info);
 
     int decode_used = 0;
 
     const int res = Atrac9Decode(decoder_handle, data, reinterpret_cast<short *>(result.data()), &decode_used);
     if (res != At9Status::ERR_SUCCESS) {
-        LOG_ERROR("Decode failure with code {}", res);
+        LOG_ERROR("Decode failure with code {}", log_hex(res));
         return false;
     }
 
@@ -110,7 +111,7 @@ bool Atrac9DecoderState::send(const uint8_t *data, uint32_t size) {
 }
 
 bool Atrac9DecoderState::receive(uint8_t *data, DecoderSize *size) {
-    Atrac9CodecInfo *info = reinterpret_cast<Atrac9CodecInfo *>(atrac9_info);
+    Atrac9CodecInfo *info = static_cast<Atrac9CodecInfo *>(atrac9_info);
 
     if (data) {
         memcpy(data, result.data(), info->frameSamples * info->channels * sizeof(uint16_t));
@@ -144,6 +145,6 @@ Atrac9DecoderState::Atrac9DecoderState(uint32_t config_data)
 
 Atrac9DecoderState::~Atrac9DecoderState() {
     Atrac9ReleaseHandle(decoder_handle);
-    delete reinterpret_cast<Atrac9CodecInfo *>(atrac9_info);
+    delete static_cast<Atrac9CodecInfo *>(atrac9_info);
     context = nullptr;
 }

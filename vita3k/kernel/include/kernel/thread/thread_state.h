@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,18 +17,17 @@
 
 #pragma once
 
-#include <condition_variable>
 #include <cpu/state.h>
 #include <kernel/callback.h>
 #include <kernel/types.h>
-#include <list>
 #include <mem/block.h>
 #include <mem/ptr.h>
+
+#include <condition_variable>
 #include <mutex>
 #include <optional>
 #include <string>
 
-struct CPUState;
 struct CPUContext;
 
 struct ThreadState;
@@ -121,7 +120,7 @@ struct ThreadState {
     std::string log_stack_traceback() const;
 
 private:
-    void push_arguments(Address callback_address, const std::vector<uint32_t> &args);
+    void push_arguments(const std::vector<uint32_t> &args);
 
     KernelState &kernel;
 

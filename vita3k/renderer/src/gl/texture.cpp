@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,17 +17,11 @@
 
 #include <renderer/functions.h>
 #include <renderer/profile.h>
-#include <renderer/pvrt-dec.h>
 
 #include <renderer/gl/functions.h>
 #include <renderer/gl/types.h>
 
 #include <gxm/functions.h>
-#include <mem/ptr.h>
-#include <util/align.h>
-#include <util/log.h>
-
-static constexpr bool log_parameter = false;
 
 namespace renderer::gl {
 
@@ -59,7 +53,7 @@ bool GLTextureCache::init(const bool hashless_texture_cache, const fs::path &tex
     TextureCache::init(hashless_texture_cache, texture_folder, game_id);
     backend = Backend::OpenGL;
 
-    return textures.init(reinterpret_cast<renderer::Generator *>(glGenTextures), reinterpret_cast<renderer::Deleter *>(glDeleteTextures));
+    return textures.init(glGenTextures, glDeleteTextures);
 }
 
 void GLTextureCache::select(size_t index, const SceGxmTexture &texture) {
@@ -72,8 +66,6 @@ void GLTextureCache::configure_texture(const SceGxmTexture &gxm_texture) {
 
     const SceGxmTextureFormat fmt = gxm::get_format(gxm_texture);
     const SceGxmTextureBaseFormat base_format = gxm::get_base_format(fmt);
-    const SceGxmTextureAddrMode uaddr = (SceGxmTextureAddrMode)(gxm_texture.uaddr_mode);
-    const SceGxmTextureAddrMode vaddr = (SceGxmTextureAddrMode)(gxm_texture.vaddr_mode);
     uint32_t width = gxm::get_width(gxm_texture);
     uint32_t height = gxm::get_height(gxm_texture);
     const GLint *const swizzle = translate_swizzle(fmt);
@@ -88,9 +80,6 @@ void GLTextureCache::configure_texture(const SceGxmTexture &gxm_texture) {
 
     apply_sampler_state(gxm_texture, texture_bind_type, anisotropic_filtering);
 
-    const GLenum internal_format = translate_internal_format(base_format);
-    const GLenum format = translate_format(base_format);
-    const GLenum type = translate_type(base_format);
     const auto texture_type = gxm_texture.texture_type();
     const auto base_fmt = gxm::get_base_format(fmt);
 
@@ -100,6 +89,10 @@ void GLTextureCache::configure_texture(const SceGxmTexture &gxm_texture) {
     uint32_t mip_index = 0;
 
     bool compressed = gxm::is_bcn_format(base_fmt);
+
+    const GLenum internal_format = translate_internal_format(base_format);
+    const GLenum format = translate_format(base_format);
+    const GLenum type = compressed ? 0 : translate_type(base_format);
 
     // GXM's cube map index is same as OpenGL: right, left, top, bottom, front, back
     GLenum upload_type = GL_TEXTURE_2D;
@@ -155,7 +148,7 @@ void GLTextureCache::upload_texture_impl(SceGxmTextureBaseFormat base_format, ui
         glPixelStorei(GL_UNPACK_COMPRESSED_BLOCK_HEIGHT, 4);
 
         const GLenum format = translate_format(base_format);
-        size_t compressed_size = renderer::texture::get_compressed_size(base_format, pixels_per_stride, height);
+        size_t compressed_size = renderer::texture::get_compressed_size(base_format, width, height);
         glCompressedTexSubImage2D(upload_type, mip_index, 0, 0, width, height, format, static_cast<GLsizei>(compressed_size), pixels);
 
         glPixelStorei(GL_UNPACK_COMPRESSED_BLOCK_SIZE, 0);

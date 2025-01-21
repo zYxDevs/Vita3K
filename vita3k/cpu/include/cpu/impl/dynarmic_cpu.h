@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,14 +18,11 @@
 #pragma once
 
 #include <dynarmic/interface/A32/a32.h>
-#include <dynarmic/interface/A32/context.h>
-#include <dynarmic/interface/A32/coprocessor.h>
 #include <dynarmic/interface/exclusive_monitor.h>
 
 #include <cpu/functions.h>
 #include <cpu/impl/unicorn_cpu.h>
 
-#include <functional>
 #include <memory>
 
 class ArmDynarmicCallback;
@@ -84,7 +81,7 @@ public:
     void set_fpscr(uint32_t val) override;
 
     CPUContext save_context() override;
-    void load_context(CPUContext context) override;
+    void load_context(const CPUContext &ctx) override;
 
     bool is_thumb_mode() override;
     int step() override;

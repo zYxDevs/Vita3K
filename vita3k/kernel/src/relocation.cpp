@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,9 +16,8 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 #include <kernel/relocation.h>
+#include <mem/ptr.h>
 #include <util/log.h>
-
-#include <self.h>
 
 #include <cassert>
 #include <cstring>
@@ -246,7 +245,7 @@ static void write_thumb_mov_abs(void *data, uint16_t symbol) {
 }
 
 static bool relocate_entry(void *data, uint32_t code, uint32_t symval, uint32_t addend, uint32_t addr) {
-    LOG_DEBUG_IF(LOG_RELOCATIONS, "code: {}, *data: {}, data: {}, addr: {}, symval: {}, addend: {}", code, log_hex(*(reinterpret_cast<uint32_t *>(data))), data, log_hex(addr), log_hex(symval), log_hex(addend));
+    LOG_DEBUG_IF(LOG_RELOCATIONS, "code: {}, *data: {}, data: {}, addr: {}, symval: {}, addend: {}", code, log_hex(*static_cast<uint32_t *>(data)), data, log_hex(addr), log_hex(symval), log_hex(addend));
     switch (code) {
     case None:
     case V4BX: // Untested.
@@ -318,7 +317,7 @@ bool relocate(const void *entries, uint32_t size, const SegmentInfosForReloc &se
             g_offset = 0,
             g_patchseg = 0;
 
-    // initiliazed in format 0, 1, 2, and 3
+    // initialized in format 0, 1, 2, and 3
     Address g_saddr = 0,
             g_addend = 0,
             g_type = 0,

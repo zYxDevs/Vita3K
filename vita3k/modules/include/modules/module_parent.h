@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 #pragma once
 
 #include <kernel/types.h>
-#include <module/module.h>
+#include <module/bridge.h>
 #include <util/types.h>
 
 struct CPUState;
@@ -35,8 +35,10 @@ void call_import(EmuEnvState &emuenv, CPUState &cpu, uint32_t nid, SceUID thread
  * \return UID of the loaded module object or SCE_ERROR on failure
  */
 SceUID load_module(EmuEnvState &emuenv, const std::string &module_path);
+int unload_module(EmuEnvState &emuenv, SceUID module_id);
 
-uint32_t start_module(EmuEnvState &emuenv, const std::shared_ptr<SceKernelModuleInfo> &module, SceSize args = 0, const Ptr<void> argp = Ptr<void>{});
+uint32_t start_module(EmuEnvState &emuenv, const SceKernelModuleInfo &module, SceSize args = 0, Ptr<const void> argp = Ptr<const void>{});
+uint32_t stop_module(EmuEnvState &emuenv, const SceKernelModuleInfo &module, SceSize args = 0, Ptr<const void> argp = Ptr<const void>{});
 
 /**
  * \brief Loads and run a system module
@@ -45,10 +47,12 @@ uint32_t start_module(EmuEnvState &emuenv, const std::shared_ptr<SceKernelModule
  * \return False on failure, true on success
  */
 bool load_sys_module(EmuEnvState &emuenv, SceSysmoduleModuleId module_id);
+int unload_sys_module(EmuEnvState &emuenv, SceSysmoduleModuleId module_id);
 bool load_sys_module_internal_with_arg(EmuEnvState &emuenv, SceUID thread_id, SceSysmoduleInternalModuleId module_id, SceSize args, Ptr<void> argp, int *retcode);
 
 Address resolve_export(KernelState &kernel, uint32_t nid);
 uint32_t resolve_nid(KernelState &kernel, Address addr);
+Ptr<void> create_vtable(const std::vector<uint32_t> &nids, MemState &mem);
 
 struct VarExport {
     uint32_t nid;

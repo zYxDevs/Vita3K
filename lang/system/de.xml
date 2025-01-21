@@ -57,6 +57,7 @@
 		<an_error_occurred>Ein Fehle ist aufgetreten.
 Fehlercode: {}</an_error_occurred>
 		<cancel>Abbrechen</cancel>
+		<close>Schließen</close>
 		<delete>Löschen</delete>
 		<file_corrupted>Die Datei ist beschädigt.</file_corrupted>
 		<microphone_disabled>Aktiviere das Mikrofon.</microphone_disabled>
@@ -335,13 +336,19 @@ Dein Vita3K-System ist bereit!</completed_setup>
 	</settings>
 
 	<settings_dialog name="Einstellungen">
-		<system name="System">
-		</system>
 		<network name="Netzwerk">
 		</network>
-		<close>Schließen</close>
 		<save>Speichern</save>
 	</settings_dialog>
+
+	<sys_apps_title>
+		<browser>Browser</browser>
+		<internet_browser>Internet-Browser</internet_browser>
+		<trophies>Trophäen</trophies>
+		<trophy_collection>Trophäen-Sammlung</trophy_collection>
+		<settings>Einstellungen</settings>
+		<content_manager>Inhaltsmanager</content_manager>
+	</sys_apps_title>
 
 	<trophy_collection>
 		<details>Details</details>
@@ -382,7 +389,8 @@ Wirklich fortfahren?</user_delete_warn>
 	<vita3k_update name="Vita3K Aktualisiert">
  		<new_version_available>Es ist eine neue Version der Vita3K verfügbar.</new_version_available>
 		<back>Zurück</back>
- 		<cancel_update>Möchtest du die Aktualisierung abbrechen?</cancel_update>
+		<cancel_update_resume>Möchtest du die Aktualisierung abbrechen?
+Wenn du abbrichst, startet das Vita3K den Download an dieser Stelle beim nächsten Aktualiseren neu.</cancel_update_resume>
 		<downloading>Download läuft ...
 Nach dem Herunterladen wird Vita3K automatisch neu gestartet und die neue Aktualisierung installiert.</downloading>
 		<not_complete_update>Aktualisierung konnte nicht abgeschlossen werden.</not_complete_update>
@@ -398,8 +406,4 @@ Nach dem Herunterladen wird Vita3K automatisch neu gestartet und die neue Aktual
 		<update>Aktualisieren</update>
 		<version>Version {}</version>
 	</vita3k_update>
-
-	<welcome name="Welcome to Vita3K">
-		<close>Schließen</close>
-	</welcome>
 </lang>

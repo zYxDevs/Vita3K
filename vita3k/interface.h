@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,20 +17,19 @@
 
 #pragma once
 
-#include <memory>
-#include <optional>
-
-#include <app/functions.h>
 #include <util/exit_code.h>
 #include <util/fs.h>
 
 #include <miniz.h>
 
+#include <memory>
+#include <optional>
+#include <vector>
+
 struct GuiState;
 struct EmuEnvState;
 
 typedef std::shared_ptr<mz_zip_archive> ZipPtr;
-typedef std::shared_ptr<mz_zip_reader_extract_iter_state> ZipFilePtr;
 
 inline void delete_zip(mz_zip_archive *zip) {
     mz_zip_reader_end(zip);
@@ -57,5 +56,5 @@ bool handle_events(EmuEnvState &emuenv, GuiState &gui);
 std::vector<ContentInfo> install_archive(EmuEnvState &emuenv, GuiState *gui, const fs::path &archive_path, const std::function<void(ArchiveContents)> &progress_callback = nullptr);
 uint32_t install_contents(EmuEnvState &emuenv, GuiState *gui, const fs::path &path);
 
-ExitCode load_app(int32_t &main_module_id, EmuEnvState &emuenv, const std::wstring &path);
+ExitCode load_app(int32_t &main_module_id, EmuEnvState &emuenv);
 ExitCode run_app(EmuEnvState &emuenv, int32_t main_module_id);

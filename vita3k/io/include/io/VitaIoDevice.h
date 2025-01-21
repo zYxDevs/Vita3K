@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -26,8 +26,10 @@ BETTER_ENUM(VitaIoDevice, int,
     gro0,
     grw0,
     imc0,
+    music0,
     os0,
     pd0,
+    photo0,
     sa0,
     savedata0,
     savedata1,
@@ -35,11 +37,14 @@ BETTER_ENUM(VitaIoDevice, int,
     tm0,
     tty0,
     tty1,
+    tty2,
+    tty3,
     ud0,
     uma0,
     ur0,
     ux0,
     vd0,
+    video0,
     vs0,
     xmc0,
     _INVALID = -1)

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,14 +17,8 @@
 
 #pragma once
 
+#include <cstdint>
 #include <functional>
-#include <map>
-#include <memory>
-#include <string>
-#include <vector>
-
-struct CPUState;
-struct MemState;
 
 typedef uint32_t Address;
 typedef std::function<bool(Address, bool)> ProtectCallback;

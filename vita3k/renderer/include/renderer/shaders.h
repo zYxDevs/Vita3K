@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include <util/fs.h>
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -27,7 +29,6 @@ struct Hints;
 
 struct SceGxmProgram;
 struct FeatureState;
-struct SceGxmVertexAttribute;
 
 namespace renderer {
 
@@ -37,8 +38,9 @@ struct State;
 // Shaders.
 bool get_shaders_cache_hashs(State &renderer);
 void save_shaders_cache_hashs(State &renderer, std::vector<ShadersHash> &shaders_cache_hashs);
-std::string load_glsl_shader(const SceGxmProgram &program, const FeatureState &features, const shader::Hints &hints, bool maskupdate, const char *cache_path, const char *title_id, const char *self_name, const std::string &shader_version, bool shader_cache);
-std::vector<uint32_t> load_spirv_shader(const SceGxmProgram &program, const FeatureState &features, bool is_vulkan, const shader::Hints &hints, bool maskupdate, const char *cache_path, const char *title_id, const char *self_name, const std::string &shader_version, bool shader_cache);
-std::string pre_load_shader_glsl(const char *hash_text, const char *shader_type_str, const char *cache_path, const char *title_id, const char *self_name);
-std::vector<uint32_t> pre_load_shader_spirv(const char *hash_text, const char *shader_type_str, const char *cache_path, const char *title_id, const char *self_name);
+std::string load_glsl_shader(const SceGxmProgram &program, const FeatureState &features, const shader::Hints &hints, bool maskupdate, const fs::path &shader_cache_path, const fs::path &shader_log_path, const std::string &shader_version, bool shader_cache);
+std::vector<uint32_t> load_spirv_shader(const SceGxmProgram &program, const FeatureState &features, bool is_vulkan, const shader::Hints &hints, bool maskupdate, const fs::path &shader_cache_path, const fs::path &shader_log_path, const std::string &shader_version, bool shader_cache);
+std::string pre_load_shader_glsl(const fs::path &shader_path);
+std::vector<uint32_t> pre_load_shader_spirv(const fs::path &shader_path);
+
 } // namespace renderer

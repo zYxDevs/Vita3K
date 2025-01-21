@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -102,6 +102,7 @@ public:
     uint32_t data_offset = 0;
 
     explicit RingBuffer(vk::BufferUsageFlags usage, const size_t capacity);
+    virtual ~RingBuffer() = default;
     virtual void create() = 0;
 
     // Allocate new data from ring buffer
@@ -176,4 +177,4 @@ public:
     void destroy_objects();
 };
 
-}; // namespace vkutil
+} // namespace vkutil

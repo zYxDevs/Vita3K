@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,7 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-#include <module/module.h>
+#include "SceProcessmgr.h"
 
 #include <io/functions.h>
 #include <kernel/state.h>
@@ -157,17 +157,17 @@ EXPORT(int, sceKernelGetRemoteProcessTime) {
 
 EXPORT(int, sceKernelGetStderr) {
     TRACY_FUNC(sceKernelGetStderr);
-    return open_file(emuenv.io, "tty0:", SCE_O_WRONLY, emuenv.pref_path.wstring(), export_name);
+    return open_file(emuenv.io, "tty0:", SCE_O_WRONLY, emuenv.pref_path, export_name);
 }
 
 EXPORT(int, sceKernelGetStdin) {
     TRACY_FUNC(sceKernelGetStdin);
-    return open_file(emuenv.io, "tty0:", SCE_O_RDONLY, emuenv.pref_path.wstring(), export_name);
+    return open_file(emuenv.io, "tty0:", SCE_O_RDONLY, emuenv.pref_path, export_name);
 }
 
 EXPORT(int, sceKernelGetStdout) {
     TRACY_FUNC(sceKernelGetStdout);
-    return open_file(emuenv.io, "tty0:", SCE_O_WRONLY, emuenv.pref_path.wstring(), export_name);
+    return open_file(emuenv.io, "tty0:", SCE_O_WRONLY, emuenv.pref_path, export_name);
 }
 
 EXPORT(int, sceKernelIsCDialogAvailable) {

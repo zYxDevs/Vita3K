@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -415,7 +415,7 @@ enum SceGxmTextureBaseFormat : uint32_t {
 template <typename T>
 constexpr static inline uint32_t operator|(const SceGxmTextureBaseFormat a, const T b) {
     return static_cast<uint32_t>(a) | static_cast<uint32_t>(b);
-};
+}
 
 enum SceGxmTextureFormat : uint32_t {
     // Supported formats
@@ -842,7 +842,7 @@ enum SceGxmColorBaseFormat : uint32_t {
 template <typename T>
 constexpr static inline uint32_t operator|(const SceGxmColorBaseFormat a, const T b) {
     return static_cast<uint32_t>(a) | static_cast<uint32_t>(b);
-};
+}
 
 enum SceGxmColorFormat : uint32_t {
 
@@ -1057,7 +1057,7 @@ enum SceGxmDepthStencilForceLoadMode : uint32_t {
 template <typename T>
 constexpr static inline uint32_t operator|(const SceGxmDepthStencilForceLoadMode a, const T b) {
     return static_cast<uint32_t>(a) | static_cast<uint32_t>(b);
-};
+}
 
 enum SceGxmDepthStencilForceStoreMode : uint32_t {
     SCE_GXM_DEPTH_STENCIL_FORCE_STORE_DISABLED = 0x00000000u,
@@ -1067,7 +1067,7 @@ enum SceGxmDepthStencilForceStoreMode : uint32_t {
 template <typename T>
 constexpr static inline uint32_t operator|(const SceGxmDepthStencilForceStoreMode a, const T b) {
     return static_cast<uint32_t>(a) | static_cast<uint32_t>(b);
-};
+}
 
 enum SceGxmColorSurfaceDitherMode : uint32_t {
     SCE_GXM_COLOR_SURFACE_DITHER_DISABLED = 0x00000000u,
@@ -1085,7 +1085,7 @@ enum SceGxmMemoryAttribFlags {
     SCE_GXM_MEMORY_ATTRIB_RW = (SCE_GXM_MEMORY_ATTRIB_READ | SCE_GXM_MEMORY_ATTRIB_WRITE)
 };
 
-enum SceGxmAttributeFormat {
+enum SceGxmAttributeFormat : uint8_t {
     SCE_GXM_ATTRIBUTE_FORMAT_U8,
     SCE_GXM_ATTRIBUTE_FORMAT_S8,
     SCE_GXM_ATTRIBUTE_FORMAT_U16,
@@ -1457,7 +1457,7 @@ struct SceGxmProgram {
     OFFSET_FUNCTION_CHECKED(SceGxmProgramParameter, program_parameters, parameters_offset)
     OFFSET_FUNCTION_CHECKED(SceGxmProgramVertexVaryings, vertex_varyings, varyings_offset)
     SceGxmParameterType get_fragment_output_type() const {
-        return static_cast<const SceGxmParameterType>(vertex_varyings()->output_param_type);
+        return vertex_varyings()->output_param_type;
     }
     uint8_t get_fragment_output_component_count() const {
         return vertex_varyings()->output_comp_count;
@@ -1509,7 +1509,7 @@ static_assert(sizeof(SceGxmProgramParameter) == 16, "Incorrect structure layout.
 struct SceGxmVertexAttribute {
     uint16_t streamIndex;
     uint16_t offset;
-    uint8_t format; // SceGxmAttributeFormat.
+    SceGxmAttributeFormat format;
     uint8_t componentCount;
     uint16_t regIndex; // Returned from sceGxmProgramParameterGetResourceIndex().
 };

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -24,11 +24,11 @@
 #include <util/string_utils.h>
 
 #include <CLI11.hpp>
-#include <vector>
 
 #include <algorithm>
 #include <exception>
 #include <iostream>
+#include <vector>
 
 namespace config {
 
@@ -79,9 +79,9 @@ static ExitCode parse(Config &cfg, const fs::path &load_path, const fs::path &ro
     }
 
     if (cfg.pref_path.empty())
-        cfg.pref_path = root_pref_path.string();
+        cfg.set_pref_path(root_pref_path);
     else {
-        if (string_utils::utf_to_wide(cfg.pref_path) != root_pref_path && !fs::exists(string_utils::utf_to_wide(cfg.pref_path))) {
+        if (cfg.get_pref_path() != root_pref_path && !fs::exists(cfg.get_pref_path())) {
             LOG_ERROR("Cannot find preference path: {}", cfg.pref_path);
             return InvalidApplicationPath;
         }
@@ -94,8 +94,7 @@ ExitCode serialize_config(Config &cfg, const fs::path &output_path) {
     const auto output = check_path(output_path);
     if (output.empty())
         return InvalidApplicationPath;
-    if (!fs::exists(output.parent_path()))
-        fs::create_directories(output.parent_path());
+    fs::create_directories(output.parent_path());
 
     cfg.update_yaml();
 
@@ -151,11 +150,11 @@ ExitCode init_config(Config &cfg, int argc, char **argv, const Root &root_paths)
     input->add_option("--self,-S", command_line.self_path, "Path to the self to run inside Title ID")
         ->default_str("eboot.bin")->group("Input");
     input->add_option("--installed-path,-r", command_line.run_app_path, "Path to the installed app to run")
-        ->default_str({})->check(CLI::IsMember(get_file_set(fs::path(cfg.pref_path) / "ux0/app")))->group("Input");
+        ->default_str({})->check(CLI::IsMember(get_file_set(cfg.get_pref_path() / "ux0/app")))->group("Input");
     input->add_option("--recompile-shader,-s", command_line.recompile_shader_path, "Recompile the given PS Vita shader (GXP format) to SPIR_V / GLSL and quit")
         ->default_str({})->group("Input");
     input->add_option("--deleted-id,-d", command_line.delete_title_id, "Title ID of installed app to delete")
-        ->default_str({})->check(CLI::IsMember(get_file_set(fs::path(cfg.pref_path) / "ux0/app")))->group("Input");
+        ->default_str({})->check(CLI::IsMember(get_file_set(cfg.get_pref_path() / "ux0/app")))->group("Input");
     input->add_option("--firmware", command_line.pup_path, "Path to the firmware file (.pup extension) to install");
     auto input_pkg = input->add_option("--pkg", command_line.pkg_path, "Path to the app file (.pkg extension) to install")
         ->default_str({})->group("Input");
@@ -254,17 +253,18 @@ ExitCode init_config(Config &cfg, int argc, char **argv, const Root &root_paths)
     command_line.update_yaml();
     cfg += command_line;
     if (cfg.pref_path.empty())
-        cfg.pref_path = root_paths.get_pref_path_string();
+        cfg.set_pref_path(root_paths.get_pref_path());
 
     if (!cfg.console) {
         LOG_INFO_IF(cfg.load_config, "Custom configuration file loaded successfully.");
 
         logging::set_level(static_cast<spdlog::level::level_enum>(cfg.log_level));
+        static constexpr std::array<const char *, 7> LIST_LOG_LEVEL = { "Trace", "Debug", "Info", "Warning", "Error", "Critical", "Off" };
 
         LOG_INFO_IF(cfg.content_path, "input-content-path: {}", cfg.content_path->string());
         LOG_INFO_IF(cfg.run_app_path, "input-installed-path: {}", *cfg.run_app_path);
         LOG_INFO("{}: {}", cfg[e_backend_renderer], cfg.backend_renderer);
-        LOG_INFO("{}: {}", cfg[e_log_level], cfg.log_level);
+        LOG_INFO("{}: {}", cfg[e_log_level], LIST_LOG_LEVEL[cfg.log_level]);
         LOG_INFO_IF(cfg.log_active_shaders, "{}: enabled", cfg[e_log_active_shaders]);
         LOG_INFO_IF(cfg.log_uniforms, "{}: enabled", cfg[e_log_uniforms]);
     }

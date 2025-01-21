@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -258,7 +258,8 @@ EXPORT(int, sceRtcGetDayOfWeek, int year, int month, int day) {
     }
 
     // https://en.wikipedia.org/wiki/Determination_of_the_day_of_the_week#Implementation-dependent_methods
-    int weekday = (day += month < 3 ? year-- : year - 2, 23 * month / 9 + day + 4 + year / 4 - year / 100 + year / 400) % 7;
+    day += month < 3 ? year-- : year - 2;
+    int weekday = (23 * month / 9 + day + 4 + year / 4 - year / 100 + year / 400) % 7;
     return weekday;
 }
 

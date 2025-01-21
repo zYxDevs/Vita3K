@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+#ifdef TRACY_ENABLE
 #include <util/log.h>
 
 #include <util/vector_utils.h>
@@ -22,7 +23,6 @@
 #include <bitset>
 #include <vector>
 
-#ifdef TRACY_ENABLE
 #include <util/tracy_module_utils.h>
 
 namespace tracy_module_utils {
@@ -83,7 +83,7 @@ void load_from(const std::vector<std::string> &active_modules_str) {
 void cleanup(std::vector<std::string> &active_modules_str) {
     // remove if not found in tracy_available_advanced_profiling_modules
     std::erase_if(active_modules_str, [](const std::string &module) {
-        return std::find(get_tracy_available_advanced_profiling_modules().begin(), get_tracy_available_advanced_profiling_modules().end(), module) == get_tracy_available_advanced_profiling_modules().end();
+        return !vector_utils::contains(get_tracy_available_advanced_profiling_modules(), module);
     });
 }
 

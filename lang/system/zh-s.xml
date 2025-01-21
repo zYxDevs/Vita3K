@@ -14,7 +14,7 @@
 		<emulation name="模拟">
 			<last_apps_used>最近使用的应用程序</last_apps_used>
 		</emulation>
-		<debug>
+		<debug name="调试">
 			<threads>线程</threads>
 			<semaphores>信号量</semaphores>
 			<mutexes>互斥锁</mutexes>
@@ -39,7 +39,7 @@
 	<about name="关于">
 		<vita3k>Vita3K：PS Vita/PS TV模拟器，是全球首个实用的PS Vita/PS TV模拟器。</vita3k>
 		<about_vita3k>Vita3K是使用C++编写的实验性开源PlayStation Vita/PlayStation TV模拟器，适用于Windows、Linux、macOS以及Android操作系统。</about_vita3k>
-		<special_credit>特别鸣谢：Vita3K图标设计由：</special_credit>
+		<special_credit>特别鸣谢：Vita3K图标设计者：</special_credit>
 		<github_website>如果您有兴趣参与贡献，请浏览我们的：</github_website>
 		<vita3k_website>更多信息请访问我们的网站：</vita3k_website>
 		<ko-fi_website>如果您想支持我们，您可以捐赠或者订阅我们的：</ko-fi_website>
@@ -67,8 +67,6 @@
 		<license>授权</license>
 		<shaders_cache>着色器缓存</shaders_cache>
 		<shaders_log>着色器日志</shaders_log>
-		<export_textures>导出纹理</export_textures>
-		<import_textures>导入纹理</import_textures>
 		<manual>说明书</manual>
 		<update>升级</update>
 		<update_history>更新历史记录</update_history>
@@ -110,6 +108,7 @@
 		<an_error_occurred>发生了错误。
 错误代码：{}</an_error_occurred>
 		<cancel>取消</cancel>
+		<close>关闭</close>
 		<delete>删除</delete>
 		<file_corrupted>文件已损坏。</file_corrupted>
 		<microphone_disabled>请启用麦克风。</microphone_disabled>
@@ -337,6 +336,7 @@
 		<toggle_gui_visibility_description>在应用程序运行时，在屏幕顶部显示和隐藏图形用户界面之间切换。</toggle_gui_visibility_description>
 		<miscellaneous>杂项</miscellaneous>
 		<toggle_texture_replacement>切换纹理替换</toggle_texture_replacement>
+		<take_a_screenshot>截屏</take_a_screenshot>
 		<error>错误</error>
 		<error_duplicate_key>该键已被使用并绑定其他键或被预留。</error_duplicate_key>
 	</controls>
@@ -516,6 +516,14 @@
 		</help>
 	</live_area>
 
+	<message>
+		<load_app_failed>无法读取“{}”，
+请检查vita3k.log查看控制台输出的详细信息。
+1、您是否已安装了固件？
+2、提取您已拥有的应用程序/游戏，并在Vita3K安装。
+3、如果您想要安装/运行Vitamin是不支持的。</load_app_failed>
+	</message>
+
 	<performance_overlay>
 		<avg>平均</avg>
 		<min>最低</min>
@@ -594,8 +602,15 @@
 			<no_modules>没有模块存在。
 请下载并安装最新的PS Vita固件。</no_modules>
 			<refresh_list>刷新列表</refresh_list>
+			<automatic>自动模式</automatic>
+			<automatic_description>选择自动模式会使用预设的模块列表。</automatic_description>
+			<auto_manual>自动兼手动模式</auto_manual>
+			<auto_manual_description>选择此模式会加载预设模块和从下方列表中选择的模块。</auto_manual_description>
+			<manual>手动模式</manual>
+			<manual_description>选择手动模式会加载从下方列表中选择的模块。</manual_description>
 		</core>
 		<cpu>
+			<unicorn>Unicorn（已弃用）</unicorn>
 			<cpu_backend>CPU后端</cpu_backend>
 			<select_cpu_backend>选择您喜欢的CPU后端。</select_cpu_backend>
 			<cpu_opt>启用优化</cpu_opt>
@@ -607,7 +622,9 @@
 			<select_backend_renderer>选择您喜欢的后端渲染器。</select_backend_renderer>
 			<gpu>GPU（重启后应用）</gpu>
 			<select_gpu>选择在Vita3K应运行的GPU。</select_gpu>
-			<renderer_accuracy>渲染器精度</renderer_accuracy>
+			<standard>标准</standard>
+			<high>高</high>
+			<renderer_accuracy>渲染精度</renderer_accuracy>
 			<v_sync>垂直同步</v_sync>
 			<v_sync_description>禁用垂直同步可以解决某些游戏的速度问题。
 建议保留启用它以避免画面撕裂。</v_sync_description>
@@ -615,6 +632,12 @@
 			<surface_sync_description>提升速度，勾选此项禁用处理器与显卡之间的表面同步。
 某些游戏需要表面同步，
 如果禁用（特别是在提升时），则可大幅提升性能。</surface_sync_description>
+			<async_pipeline_compilation>异步管线编译</async_pipeline_compilation>
+			<async_pipeline_compilation_description>允许在多个并发线程上同时编译管线。
+这可以减少管线编译卡顿，但代价是会出现暂时的图形故障。</async_pipeline_compilation_description>
+			<nearest>最邻近</nearest>
+			<bilinear>双线性</bilinear>
+			<bicubic>双三次</bicubic>
 			<screen_filter>屏幕过滤</screen_filter>
 			<screen_filter_description>设置要应用的后处理过滤器（可理解为抗锯齿）。</screen_filter_description>
 			<internal_resolution_upscaling>内部分辨率提升</internal_resolution_upscaling>
@@ -637,7 +660,19 @@
 请注意，一些有益的扩展功能将被禁用，
 并非所有显卡都与此兼容。</spirv_shader_description>
 			<clean_shaders>清除着色器缓存以及日志</clean_shaders>
+			<fps_hack>FPS修改</fps_hack>
+			<fps_hack_description>游戏修改允许一些以30FPS运行的游戏在模拟器上以60FPS的速度运行。
+请注意这只是一个修改，仅适用于某些游戏。
+在其他游戏中，它可能没有效果或使其出现两倍速。</fps_hack_description>
 		</gpu>
+		<audio name="音频">
+			<audio_backend>音频后端</audio_backend>
+			<select_audio_backend>选择您喜欢的音频后端。</select_audio_backend>
+			<audio_volume>音频音量</audio_volume>
+			<audio_volume_description>调整全局音频输出的音量百分比。</audio_volume_description>
+			<enable_ngs_support>启用NGS支持</enable_ngs_support>
+			<ngs_description>取消勾选此项禁用对高级音频库NGS的支持。</ngs_description>
+		</audio>
 		<system name="系统">
 			<select_enter_button>确认按键分配
 请选择您的“确认”按键。</select_enter_button>
@@ -654,10 +689,12 @@
 		</system>
 		<emulator name="模拟器">
 			<boot_apps_full_screen>以全屏启动应用程序</boot_apps_full_screen>
-			<audio_backend>音频后端</audio_backend>
-			<select_audio_backend>选择您喜欢的音频后端。</select_audio_backend>
-			<enable_ngs_support>启用NGS支持</enable_ngs_support>
-			<ngs_description>取消勾选此项禁用对高级音频库NGS的支持。</ngs_description>
+			<trace>追踪</trace>
+			<info>信息</info>
+			<warning>警告</warning>
+			<error>错误</error>
+			<critical>关键</critical>
+			<off>关闭</off>
 			<log_level>日志级别</log_level>
 			<select_log_level>选择您喜欢的日志级别。</select_log_level>
 			<archive_log>档案日志</archive_log>
@@ -675,8 +712,18 @@
 			<check_for_updates_description>启动时自动检查更新。</check_for_updates_description>
 			<performance_overlay>性能图层</performance_overlay>
 			<performance_overlay_description>在屏幕上以图层的形式显示性能信息。</performance_overlay_description>
+			<minimum>最少</minimum>
+			<low>少</low>
+			<medium>中等</medium>
+			<maximum>最多</maximum>
 			<detail>细节</detail>
 			<select_detail>选择您喜欢的性能图层细节。</select_detail>
+			<top_left>左上</top_left>
+			<top_center>中上</top_center>
+			<top_right>右上</top_right>
+			<bottom_left>左下</bottom_left>
+			<bottom_center>中下</bottom_center>
+			<bottom_right>右下</bottom_right>
 			<position>位置</position>
 			<select_position>选择您喜欢的性能图层位置。</select_position>
 			<case_insensitive>检查在区分大小写的文件系统上启用不区分大小写的路径查找。
@@ -692,6 +739,8 @@
 您需要手动将旧文件夹移动到新位置。</reset_emu_path_description>
 			<custom_config_settings>自定义配置设置</custom_config_settings>
 			<clear_custom_config>清除自定义配置</clear_custom_config>
+			<screenshot_image_type>截屏图片类型</screenshot_image_type>
+			<screenshot_format>截屏保存格式</screenshot_format>
 		</emulator>
 		<gui name="图形用户界面">
 			<show_gui>图形用户界面可见</show_gui>
@@ -745,7 +794,7 @@
 			<timeout_attempts_description>当服务器没有响应时要执行多次尝试。
 如果您有非常不稳定或是非常慢的网络可能会很有用。</timeout_attempts_description>
 			<timeout_sleep>HTTP超时休眠</timeout_sleep>
-			<timeout_sleep_description>当服务器没有响应时尝试休眠时间。
+			<timeout_sleep_description>当服务器没有响应时尝试进入休眠时间。
 如果您有非常不稳定或是非常慢的网络可能会很有用。</timeout_sleep_description>
 			<read_end_attempts>HTTP读取终止尝试</read_end_attempts>
 			<read_end_attempts_description>当没有更多数据可读取时，尝试多次可以提升性能，
@@ -776,12 +825,20 @@
 			<unwatch_import_calls>取消监视导入调用</unwatch_import_calls>
 			<watch_import_calls>监视导入调用</watch_import_calls>
 		</debug>
-		<close>关闭</close>
 		<save_reboot>保存并重启</save_reboot>
 		<save_apply>保存并应用</save_apply>
 		<save>保存</save>
 		<keep_changes>点击保存保留您的更改。</keep_changes>
 	</settings_dialog>
+
+	<sys_apps_title>
+		<browser>浏览器</browser>
+		<internet_browser>互联网浏览器</internet_browser>
+		<trophies>Trophy（奖杯）</trophies>
+		<trophy_collection>Trophy（奖杯）收藏</trophy_collection>
+		<settings>设定</settings>
+		<content_manager>内容管理</content_manager>
+	</sys_apps_title>
 
 	<trophy_collection>
 		<delete_trophy>删除奖杯</delete_trophy>
@@ -825,7 +882,8 @@
 	<vita3k_update name="Vita3K更新">
  		<new_version_available>检测到新版本的Vita3K。</new_version_available>
 		<back>返回</back>
- 		<cancel_update>要取消升级吗？</cancel_update>
+ 		<cancel_update_resume>要取消升级吗？
+若取消升级，下次升级时将从中断处开始下载。</cancel_update_resume>
 		<downloading>下载中…
 下载完毕后，Vita3K将会自动重新启动，并安装新的升级。</downloading>
 		<not_complete_update>无法完成升级。</not_complete_update>
@@ -858,6 +916,5 @@
 		<discord_help>可以在#help频道中找到更多支持</discord_help>
 		<no_piracy>Vita3K不纵容盗版。您必须提取您自己拥有的游戏。</no_piracy>
 		<show_next_time>下次显示</show_next_time>
-		<close>关闭</close>
 	</welcome>
 </lang>

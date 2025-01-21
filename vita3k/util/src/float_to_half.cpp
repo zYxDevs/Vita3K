@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -79,7 +79,7 @@ void float_to_half_basic(const float *src, uint16_t *dest, const int total) {
 // check and use AVX+F16C instruction set if possible
 
 // use function variable as imitation of self-modifying code.
-// on first use we check processor features and set appropriate realisation, later we immediately use appropriate realisation
+// on first use we check processor features and set appropriate realization, later we immediately use appropriate realization.
 void float_to_half_init(const float *src, uint16_t *dest, const int total);
 
 void (*float_to_half_var)(const float *src, uint16_t *dest, const int total) = float_to_half_init;

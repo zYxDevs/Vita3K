@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,8 +18,7 @@
 #pragma once
 
 #include <fmt/format.h>
-#include <mem/ptr.h> // Address.
-#include <util/types.h>
+#include <mem/util.h> // Address.
 
 #include <array>
 #include <cstdint>
@@ -27,10 +26,8 @@
 #include <memory>
 #include <sstream>
 #include <string>
-#include <vector>
 
 struct CPUState;
-struct MemState;
 struct CPUContext;
 struct CPUInterface;
 struct ThreadState;
@@ -45,7 +42,7 @@ typedef void *ExclusiveMonitorPtr;
 struct CPUProtocolBase {
     virtual void call_svc(CPUState &cpu, uint32_t svc, Address pc, ThreadState &thread) = 0;
     virtual Address get_watch_memory_addr(Address addr) = 0;
-    virtual ExclusiveMonitorPtr get_exlusive_monitor() = 0;
+    virtual ExclusiveMonitorPtr get_exclusive_monitor() = 0;
     virtual ~CPUProtocolBase() = default;
 };
 

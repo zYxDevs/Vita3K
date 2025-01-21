@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -26,7 +26,6 @@
 #include <mutex>
 #include <string_view>
 
-struct SDL_Cursor;
 struct SDL_Window;
 struct DisplayState;
 struct GxmState;
@@ -45,16 +44,16 @@ enum struct Filter : int {
 };
 
 struct State {
-    std::string cache_path;
-    std::string log_path;
-    std::string shared_path;
+    fs::path cache_path;
+    fs::path log_path;
+    fs::path shared_path;
     fs::path static_assets;
-    const char *title_id;
-    const char *self_name;
+    fs::path shaders_path;
+    fs::path shaders_log_path;
 
     Backend current_backend;
     FeatureState features;
-    int res_multiplier;
+    float res_multiplier;
     bool disable_surface_sync;
     bool stretch_the_display_area;
 
@@ -81,7 +80,7 @@ struct State {
 
     bool need_page_table = false;
 
-    virtual bool init(const fs::path &static_assets, const bool hashless_texture_cache) = 0;
+    virtual bool init() = 0;
     virtual void late_init(const Config &cfg, const std::string_view game_id, MemState &mem) = 0;
 
     virtual TextureCache *get_texture_cache() = 0;
@@ -90,6 +89,8 @@ struct State {
         const GxmState &gxm, MemState &mem)
         = 0;
     virtual void swap_window(SDL_Window *window) = 0;
+    // perform a screenshot of the (upscaled) frame to be rendered and return it in a vector in its rgba8 format
+    virtual std::vector<uint32_t> dump_frame(DisplayState &display, uint32_t &width, uint32_t &height) = 0;
     // return a mask of the features which can influence the compiled shaders
     virtual uint32_t get_features_mask() {
         return 0;
@@ -99,6 +100,7 @@ struct State {
     virtual void set_screen_filter(const std::string_view &filter) = 0;
     virtual int get_max_anisotropic_filtering() = 0;
     virtual void set_anisotropic_filtering(int anisotropic_filtering) = 0;
+    virtual int get_max_2d_texture_width() = 0;
     virtual void set_async_compilation(bool enable) {}
     void set_surface_sync_state(bool disable) {
         disable_surface_sync = disable;
@@ -114,9 +116,27 @@ struct State {
         return { "Automatic" };
     }
 
+    virtual std::string_view get_gpu_name() = 0;
+
     virtual void precompile_shader(const ShadersHash &hash) = 0;
     virtual void preclose_action() = 0;
 
     virtual ~State() = default;
+
+    fs::path texture_folder() const {
+        return shared_path / "textures";
+    }
+
+    void init_paths(const Root &root_paths) {
+        cache_path = root_paths.get_cache_path();
+        log_path = root_paths.get_log_path();
+        shared_path = root_paths.get_shared_path();
+        static_assets = root_paths.get_static_assets_path();
+    }
+
+    void set_app(const char *title_id, const char *self_name) {
+        shaders_path = cache_path / "shaders" / title_id / self_name;
+        shaders_log_path = log_path / "shaderlog" / title_id / self_name;
+    }
 };
 } // namespace renderer

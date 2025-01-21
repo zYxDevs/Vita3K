@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -23,10 +23,8 @@
 
 #include "lay_out_args.h"
 #include "read_arg.h"
-#include "vargs.h"
 #include "write_return_value.h"
 
-#include <config/functions.h>
 #include <config/state.h>
 #include <emuenv/state.h>
 

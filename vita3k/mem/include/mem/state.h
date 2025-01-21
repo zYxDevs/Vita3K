@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,12 +18,12 @@
 #pragma once
 
 #include <mem/allocator.h>
+#include <mem/functions.h>
 #include <mem/util.h>
 
-#include <array>
 #include <map>
+#include <memory>
 #include <mutex>
-#include <set>
 
 struct AllocMemPage {
     uint32_t allocated : 4;
@@ -56,7 +56,7 @@ struct ProtectSegmentInfo {
     }
 };
 
-typedef std::map<Address, ProtectSegmentInfo, std::greater<Address>> ProtectSegmentTrees;
+typedef std::map<Address, ProtectSegmentInfo, std::greater<>> ProtectSegmentTrees;
 
 struct MemExternalMapping {
     Address address;
@@ -77,5 +77,5 @@ struct MemState {
 
     bool use_page_table = false;
     PageTable page_table;
-    std::map<uint64_t, MemExternalMapping, std::greater<uint64_t>> external_mapping;
+    std::map<uint64_t, MemExternalMapping, std::greater<>> external_mapping;
 };

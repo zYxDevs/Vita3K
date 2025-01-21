@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,22 +17,6 @@
 
 #pragma once
 
-#include <cstdint>
+#include <module/module.h>
 
-#include <gxm/types.h>
-#include <mem/ptr.h>
-#include <renderer/gxm_types.h>
-
-struct MemState;
-
-namespace renderer {
-
-struct State;
-
-enum SurfaceTextureRetrievePurpose {
-    READING,
-    WRITING,
-};
-
-class SurfaceCache {};
-} // namespace renderer
+DECL_EXPORT(int, sceKernelGetMainModuleSdkVersion);

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@
 
 #include <mem/ptr.h>
 
-enum SceJpegEncErrorCode {
+enum SceJpegEncErrorCode : uint32_t {
     SCE_JPEGENC_ERROR_IMAGE_SIZE = 0x80650200,
     SCE_JPEGENC_ERROR_INSUFFICIENT_BUFFER = 0x80650201,
     SCE_JPEGENC_ERROR_INVALID_COMPRATIO = 0x80650202,

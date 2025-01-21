@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,18 +17,17 @@
 
 #pragma once
 
+#include <mem/mempool.h>
+#include <mem/ptr.h>
+#include <ngs/common.h>
+#include <ngs/scheduler.h>
+#include <ngs/types.h>
+#include <util/types.h>
+
 #include <array>
 #include <cstdint>
 #include <mutex>
 #include <vector>
-
-#include <mem/ptr.h>
-#include <util/types.h>
-
-#include <mem/mempool.h>
-#include <ngs/common.h>
-#include <ngs/scheduler.h>
-#include <ngs/types.h>
 
 struct MemState;
 struct KernelState;
@@ -227,6 +226,4 @@ void voice_definition_init(State &ngs, MemState &mem);
 Ptr<VoiceDefinition> get_voice_definition(State &ngs, MemState &mem, ngs::BussType type);
 void apply_voice_definition(VoiceDefinition *definition, std::vector<std::unique_ptr<ngs::Module>> &mods);
 uint32_t get_voice_definition_size(VoiceDefinition *definition);
-
-void atrac9_get_buffer_parameter(uint32_t start_sample, uint32_t num_samples, uint32_t info, SceNgsAT9SkipBufferInfo &parameter);
 } // namespace ngs

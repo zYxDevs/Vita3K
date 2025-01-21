@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -33,6 +33,7 @@ struct DialogLangState {
     std::map<std::string, std::string> common = {
         { "an_error_occurred", "An error occurred.\nError code: {}" },
         { "cancel", "Cancel" },
+        { "close", "Close" },
         { "delete", "Delete" },
         { "file_corrupted", "The file is corrupt." },
         { "microphone_disabled", "Enable the microphone." },
@@ -45,6 +46,7 @@ struct DialogLangState {
         { "submit", "Submit" },
         { "yes", "Yes" }
     };
+    std::map<std::string, std::string> message = { { "load_app_failed", "Failed to load {}.\nCheck vita3k.log to see console output for details.\n1. Do you have installed firmware?\n2. Dump your own app(s)/game(s) and install it on Vita3K.\n3. If you want to install or boot Vitamin, it is not supported." } };
     std::map<std::string, std::string> trophy = { { "preparing_start_app", "Preparing to start the application..." } };
     struct SaveData {
         std::map<std::string, std::string> deleting = {
@@ -110,6 +112,7 @@ struct LangState {
             { "last_apps_used", "Last Apps used" }
         };
         std::map<std::string, std::string> debug = {
+            { "title", "Debug" },
             { "threads", "Threads" },
             { "semaphores", "Semaphores" },
             { "mutexes", "Mutexes" },
@@ -166,8 +169,6 @@ struct LangState {
             { "license", "License" },
             { "shaders_cache", "Shaders Cache" },
             { "shaders_log", "Shaders Log" },
-            { "export_textures", "Export Textures" },
-            { "import_textures", "Import Textures" },
             { "manual", "Manual" },
             { "update", "Update" },
             { "update_history", "Update History" },
@@ -258,7 +259,7 @@ struct LangState {
         { "connected", "{} controllers connected" },
         { "name", "Name" },
         { "num", "Num" },
-        { "not_connected", "No compatible controllers connected.\nPlease connect a controller that is compatible with SDL2." },
+        { "not_connected", "No compatible controllers connected.\nConnect a controller that is compatible with SDL2." },
         { "motion_support", "Gamepad has motion support" },
         { "rebind_controls", "Rebind Controls" },
         { "led_color", "LED Color" },
@@ -307,6 +308,7 @@ struct LangState {
         { "toggle_gui_visibility_description", "Toggles between showing and hiding the GUI at the top of the screen while the app is running." },
         { "miscellaneous", "Miscellaneous" },
         { "toggle_texture_replacement", "Toggle Texture Replacement" },
+        { "take_a_screenshot", "Take A Screenshot" },
         { "error", "Error" },
         { "error_duplicate_key", "The key is used for other bindings or it is reserved." }
     };
@@ -389,7 +391,7 @@ struct LangState {
             { "copy_paste_zrif", "Ctrl (Cmd) + C to copy, Ctrl (Cmd) + V to paste." },
             { "delete_pkg", "Delete the pkg file?" },
             { "delete_bin_rif", "Delete the work.bin/rif file?" },
-            { "failed_install_package", "Failed to install package.\nPlease check pkg and work.bin/rif file or zRIF key." }
+            { "failed_install_package", "Failed to install package.\nCheck pkg and work.bin/rif file or zRIF key." }
         };
         std::map<std::string, std::string> archive_install = {
             { "select_install_type", "Select install type" },
@@ -404,7 +406,7 @@ struct LangState {
         };
         std::map<std::string, std::string> license_install = {
             { "successed_install_license", "Successfully installed license." },
-            { "failed_install_license", "Failed to install license.\nPlease check work.bin/rif file or zRIF key." }
+            { "failed_install_license", "Failed to install license.\nCheck work.bin/rif file or zRIF key." }
         };
         std::map<std::string, std::string> reinstall = {
             { "reinstall_content", "Reinstall this content?" },
@@ -511,7 +513,6 @@ struct LangState {
     struct SettingsDialog {
         std::map<std::string, std::string> main_window = {
             { "title", "Settings" },
-            { "close", "Close" },
             { "save_reboot", "Save & Reboot" },
             { "save_apply", "Save & Apply" },
             { "save", "Save" },
@@ -525,9 +526,16 @@ struct LangState {
             { "search_modules", "Search Modules" },
             { "clear_list", "Clear List" },
             { "no_modules", "No modules present.\nPlease download and install the last PS Vita firmware." },
-            { "refresh_list", "Refresh List" }
+            { "refresh_list", "Refresh List" },
+            { "automatic", "Automatic" },
+            { "automatic_description", "Select Automatic mode to use a preset list of modules." },
+            { "auto_manual", "Auto & Manual" },
+            { "auto_manual_description", "Select this mode to load Automatic module and selected modules from the list below." },
+            { "manual", "Manual" },
+            { "manual_description", "Select Manual mode to load selected modules from the list below." }
         };
         std::map<std::string, std::string> cpu = {
+            { "unicorn", "Unicorn (deprecated)" },
             { "cpu_backend", "CPU Backend" },
             { "select_cpu_backend", "Select your preferred CPU backend." },
             { "cpu_opt", "Enable optimizations" },
@@ -539,11 +547,18 @@ struct LangState {
             { "select_backend_renderer", "Select your preferred backend renderer." },
             { "gpu", "GPU (Reboot to apply)" },
             { "select_gpu", "Select the GPU Vita3K should run on." },
+            { "standard", "Standard" },
+            { "high", "High" },
             { "renderer_accuracy", "Renderer Accuracy" },
             { "v_sync", "V-Sync" },
             { "v_sync_description", "Disabling V-Sync can fix the speed issue in some games.\nIt is recommended to keep it enabled to avoid visual tearing." },
             { "disable_surface_sync", "Disable Surface Sync" },
             { "surface_sync_description", "Speed hack, check the box to disable surface syncing between CPU and GPU.\nSurface syncing is needed by a few games.\nGives a big performance boost if disabled (in particular when upscaling is on)." },
+            { "async_pipeline_compilation", "Asynchronous Pipeline Compilation" },
+            { "async_pipeline_compilation_description", "Allow pipelines to be compiled concurrently on multiple concurrent threads.\nThis decreases pipeline compilation stutter at the cost of temporary graphical glitches." },
+            { "nearest", "Nearest" },
+            { "bilinear", "Bilinear" },
+            { "bicubic", "Bicubic" },
             { "screen_filter", "Screen Filter" },
             { "screen_filter_description", "Set post-processing filter to apply." },
             { "internal_resolution_upscaling", "Internal Resolution Upscaling" },
@@ -559,7 +574,19 @@ struct LangState {
             { "shader_cache_description", "Check the box to enable shader cache to pre-compile it at game startup.\nUncheck to disable this feature." },
             { "spirv_shader", "Use Spir-V Shader (deprecated)" },
             { "spirv_shader_description", "Pass generated Spir-V shader directly to driver.\nNote that some beneficial extensions will be disabled,\nand not all GPUs are compatible with this." },
-            { "clean_shaders", "Clean Shaders Cache and Log" }
+            { "clean_shaders", "Clean Shaders Cache and Log" },
+            { "fps_hack", "FPS Hack" },
+            { "fps_hack_description", "Game hack which allows some games running at 30 FPS to run at 60 FPS on the emulator.\nNote that this is a hack and will only work on some games.\nOn other games, it may have no effect or make them run twice as fast." }
+        };
+        std::map<std::string, std::string> audio = {
+            { "title", "Audio" },
+            { "audio_backend", "Audio Backend" },
+            { "select_audio_backend", "Select your preferred audio backend." },
+            { "audio_volume", "Audio Volume" },
+            { "audio_volume_description", "Adjusts the volume percentage of all audio outputs." },
+            { "enable_ngs_support", "Enable NGS support" },
+            { "ngs_description", "Uncheck the box to disable support for advanced audio library NGS." }
+
         };
         std::map<std::string, std::string> system = {
             { "title", "System" },
@@ -577,10 +604,12 @@ struct LangState {
         std::map<std::string, std::string> emulator = {
             { "title", "Emulator" },
             { "boot_apps_full_screen", "Boot apps in full screen" },
-            { "audio_backend", "Audio Backend" },
-            { "select_audio_backend", "Select your preferred audio backend." },
-            { "enable_ngs_support", "Enable NGS support" },
-            { "ngs_description", "Uncheck the box to disable support for advanced audio library NGS." },
+            { "trace", "Trace" },
+            { "info", "Info" },
+            { "warning", "Warning" },
+            { "error", "Error" },
+            { "critical", "Critical" },
+            { "off", "Off" },
             { "log_level", "Log Level" },
             { "select_log_level", "Select your preferred log level." },
             { "archive_log", "Archive Log" },
@@ -598,10 +627,20 @@ struct LangState {
             { "check_for_updates_description", "Automatically check for updates at startup." },
             { "performance_overlay", "Performance overlay" },
             { "performance_overlay_description", "Display performance information on the screen as an overlay." },
+            { "minimum", "Minimum" },
+            { "low", "Low" },
+            { "medium", "Medium" },
+            { "maximum", "Maximum" },
             { "detail", "Detail" },
-            { "select_detail", "Select your preferred perfomance overlay detail." },
+            { "select_detail", "Select your preferred performance overlay detail." },
+            { "top_left", "Top Left" },
+            { "top_center", "Top Center" },
+            { "top_right", "Top Right" },
+            { "bottom_left", "Bottom Left" },
+            { "bottom_center", "Bottom Center" },
+            { "bottom_right", "Bottom Right" },
             { "position", "Position" },
-            { "select_position", "Select your preferred perfomance overlay position." },
+            { "select_position", "Select your preferred performance overlay position." },
             { "case_insensitive", "Check to enable case-insensitive path finding on case sensitive filesystems.\nRESETS ON RESTART" },
             { "case_insensitive_description", "Allows emulator to attempt to search for files regardless of case\non non-Windows platforms." },
             { "emu_storage_folder", "Emulated System Storage Folder" },
@@ -611,7 +650,9 @@ struct LangState {
             { "reset_emu_path", "Reset Emulator Path" },
             { "reset_emu_path_description", "Reset Vita3K emulator path to the default.\nYou will need to move your old folder to the new location manually." },
             { "custom_config_settings", "Custom Config Settings" },
-            { "clear_custom_config", "Clear Custom Config" }
+            { "clear_custom_config", "Clear Custom Config" },
+            { "screenshot_image_type", "screenshot image type" },
+            { "screenshot_format", "Screenshot format" }
         };
         std::map<std::string, std::string> gui = {
             { "title", "GUI" },
@@ -690,6 +731,14 @@ struct LangState {
         };
     };
     SettingsDialog settings_dialog;
+    std::map<std::string, std::string> sys_apps_title = {
+        { "browser", "Browser" },
+        { "internet_browser", "Internet Browser" },
+        { "trophies", "Trophies" },
+        { "trophy_collection", "Trophy Collection" },
+        { "settings", "Settings" },
+        { "content_manager", "Content Manager" }
+    };
     std::map<std::string, std::string> trophy_collection = {
         { "delete_trophy", "Delete Trophy" },
         { "trophy_deleted", "This trophy information saved on this user will be deleted." },
@@ -704,7 +753,9 @@ struct LangState {
         { "trophies", "Trophies" },
         { "grade", "Grade" },
         { "progress", "Progress" },
-        { "updated", "Updated" }
+        { "updated", "Updated" },
+        { "advance", "Advance" },
+        { "show_hidden", "Show Hidden Trophies" }
     };
     std::map<std::string, std::string> user_management = {
         { "select_user", "Select User" },
@@ -730,7 +781,7 @@ struct LangState {
         { "title", "Vita3K Update" },
         { "new_version_available", "A new version of Vita3K is available." },
         { "back", "Back" },
-        { "cancel_update", "Do you want to cancel the update?" },
+        { "cancel_update_resume", "Do you want to cancel the update?\nIf you cancel, the next time you update, Vita3K will start downloading from this point." },
         { "downloading", "Downloading...\nAfter the download is complete, Vita3K will restart automatically and then install the new update." },
         { "not_complete_update", "Could not complete the update." },
         { "minutes_left", "{} Minutes Left" },
@@ -761,8 +812,7 @@ struct LangState {
         { "welcome_contribution", "Contributions are welcome!" },
         { "discord_help", "Additional support can be found in the #help channel of the" },
         { "no_piracy", "Vita3K does not condone piracy. You must dump your own games." },
-        { "show_next_time", "Show next time" },
-        { "close", "Close" }
+        { "show_next_time", "Show next time" }
     };
     struct Common {
         std::vector<std::string> wday = {

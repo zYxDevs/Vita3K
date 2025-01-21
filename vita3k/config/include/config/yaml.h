@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -32,12 +32,12 @@ struct YamlLoader {
         yaml_node = YAML::Node{};
     }
 
-    explicit YamlLoader(const YAML::Node &node) {
-        yaml_node = node;
-    }
+    explicit YamlLoader(const YAML::Node &node)
+        : yaml_node(node) {}
 
     explicit YamlLoader(const fs::path &path) {
-        yaml_node = YAML::LoadFile(path.generic_path().string());
+        fs::ifstream fin(path);
+        yaml_node = YAML::Load(fin);
     }
 
     virtual ~YamlLoader() = default;
@@ -55,7 +55,8 @@ struct YamlLoader {
     }
 
     virtual void load_new_config(const fs::path &path) {
-        yaml_node = YAML::LoadFile(path.generic_path().string());
+        fs::ifstream fin(path);
+        yaml_node = YAML::Load(fin);
     }
 
     // Check if a node index exists, and return the current value in the node network

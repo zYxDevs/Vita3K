@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -25,14 +25,10 @@
 
 #include <cpu/functions.h>
 #include <mem/ptr.h>
-#include <util/align.h>
-#include <util/arm.h>
-#include <util/find.h>
+#include <util/lock_and_find.h>
 #include <util/log.h>
 
 #include <SDL_thread.h>
-#include <spdlog/fmt/fmt.h>
-#include <util/lock_and_find.h>
 
 int CorenumAllocator::new_corenum() {
     const std::lock_guard<std::mutex> guard(lock);
@@ -86,7 +82,7 @@ KernelState::KernelState()
     : debugger(*this) {
 }
 
-bool KernelState::init(MemState &mem, CallImportFunc call_import, CPUBackend cpu_backend, bool cpu_opt) {
+bool KernelState::init(MemState &mem, const CallImportFunc &call_import, CPUBackend cpu_backend, bool cpu_opt) {
     constexpr std::size_t MAX_CORE_COUNT = 150;
 
     corenum_allocator.set_max_core_count(MAX_CORE_COUNT);
@@ -125,8 +121,8 @@ void KernelState::set_memory_watch(bool enabled) {
 
 void KernelState::invalidate_jit_cache(Address start, size_t length) {
     std::lock_guard<std::mutex> lock(mutex);
-    for (auto thread : threads) {
-        ::invalidate_jit_cache(*thread.second->cpu, start, length);
+    for (const auto &[_, thread] : threads) {
+        ::invalidate_jit_cache(*thread->cpu, start, length);
     }
 }
 
@@ -158,7 +154,7 @@ Ptr<Ptr<void>> KernelState::get_thread_tls_addr(MemState &mem, SceUID thread_id,
     Ptr<Ptr<void>> address(0);
     // magic numbers taken from decompiled source. There is 0x400 unused bytes of unknown usage
     if (key <= 0x100 && key >= 0) {
-        const ThreadStatePtr thread = util::find(thread_id, threads);
+        const ThreadStatePtr thread = get_thread(thread_id);
         address = thread->tls.get_ptr<Ptr<void>>() + key;
     } else {
         LOG_ERROR("Wrong tls slot index. TID:{} index:{}", thread_id, key);
@@ -191,14 +187,14 @@ void KernelState::resume_threads() {
     paused_threads_status.clear();
 }
 
-std::shared_ptr<SceKernelModuleInfo> KernelState::find_module_by_addr(Address address) {
+SceKernelModuleInfo *KernelState::find_module_by_addr(Address address) {
     const auto lock = std::lock_guard(mutex);
-    for (auto [_, mod] : loaded_modules) {
-        for (auto seg : mod->segments) {
+    for (auto &[_, mod] : loaded_modules) {
+        for (auto &seg : mod->info.segments) {
             if (!seg.size)
                 continue;
             if (seg.vaddr.address() <= address && address <= seg.vaddr.address() + seg.memsz) {
-                return mod;
+                return &mod->info;
             }
         }
     }

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -26,11 +26,10 @@ extern "C" {
 }
 
 #include <cassert>
-#include <chrono>
 
 uint64_t PlayerState::get_framerate_microseconds() {
     AVRational rational = format->streams[video_stream_id]->avg_frame_rate;
-    return static_cast<float>(rational.den) / static_cast<float>(rational.num) * 1000000;
+    return 1000000ull * rational.den / rational.num;
 }
 
 DecoderSize PlayerState::get_size() {
@@ -67,16 +66,14 @@ void PlayerState::free_video() {
         audio_packets.pop();
     }
 
-    video_playing = "";
+    video_playing.clear();
 }
 
 void PlayerState::switch_video(const std::string &path) {
     free_video();
     video_playing = path;
 
-    int error;
-
-    error = avformat_open_input(&format, path.c_str(), nullptr, nullptr);
+    int error = avformat_open_input(&format, path.c_str(), nullptr, nullptr);
     assert(error == 0);
 
     // Load stream info.
@@ -145,11 +142,10 @@ std::vector<int16_t> PlayerState::receive_audio() {
     if (video_playing.empty())
         return {};
 
-    int error;
     AVFrame *frame = av_frame_alloc();
     std::vector<int16_t> data;
     while (true) {
-        error = avcodec_receive_frame(audio_context, frame);
+        int error = avcodec_receive_frame(audio_context, frame);
 
         if (error == AVERROR(EAGAIN) && next_packet(audio_stream_id))
             continue;
@@ -199,11 +195,10 @@ std::vector<uint8_t> PlayerState::receive_video() {
     if (video_playing.empty())
         return {};
 
-    int error;
     AVFrame *frame = av_frame_alloc();
     std::vector<uint8_t> data;
     while (true) {
-        error = avcodec_receive_frame(video_context, frame);
+        int error = avcodec_receive_frame(video_context, frame);
 
         if (error == AVERROR(EAGAIN) && next_packet(video_stream_id))
             continue;
@@ -249,6 +244,6 @@ void PlayerState::queue(const std::string &path) {
 PlayerState::~PlayerState() {
     free_video();
 
-    video_playing = "";
+    video_playing.clear();
     videos_queue = {};
 }

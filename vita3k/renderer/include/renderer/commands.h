@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -21,8 +21,6 @@
 #include <cstdint>
 #include <functional>
 #include <vector>
-
-#include <dlmalloc.h>
 
 namespace renderer {
 #define REPORT_MISSING(backend) LOG_ERROR("Unimplemented graphics API handler with backend {}", (int)backend)

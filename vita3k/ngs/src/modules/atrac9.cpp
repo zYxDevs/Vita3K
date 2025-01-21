@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,7 +16,6 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 #include <ngs/modules/atrac9.h>
-#include <util/bytes.h>
 #include <util/log.h>
 
 extern "C" {
@@ -27,34 +26,6 @@ namespace ngs {
 
 SwrContext *Atrac9Module::swr_mono_to_stereo = nullptr;
 SwrContext *Atrac9Module::swr_stereo = nullptr;
-
-void atrac9_get_buffer_parameter(const uint32_t start_sample, const uint32_t num_samples, const uint32_t info, SceNgsAT9SkipBufferInfo &parameter) {
-    const uint8_t sample_rate_index = ((info & (0b1111 << 12)) >> 12);
-    const uint8_t block_rate_index = ((info & (0b111 << 9)) >> 9);
-    const uint16_t frame_bytes = ((((info & 0xFF0000) >> 16) << 3) | ((info & (0b111 << 29)) >> 29)) + 1;
-    const uint8_t superframe_index = (info & (0b11 << 27)) >> 27;
-
-    // Calculate bytes per superframe.
-    const uint32_t frame_per_superframe = 1 << superframe_index;
-    const uint32_t bytes_per_superframe = frame_bytes * frame_per_superframe;
-
-    // Calculate total superframe
-    static const int8_t sample_rate_index_to_frame_sample_power[] = {
-        6, 6, 7, 7, 7, 8, 8, 8, 6, 6, 7, 7, 7, 8, 8, 8
-    };
-
-    const uint32_t samples_per_frame = 1 << sample_rate_index_to_frame_sample_power[sample_rate_index];
-    const uint32_t samples_per_superframe = samples_per_frame * frame_per_superframe;
-
-    const uint32_t start_superframe = (start_sample / samples_per_superframe);
-    const uint32_t num_superframe = (start_sample + num_samples + samples_per_superframe - 1) / samples_per_superframe - start_superframe;
-
-    parameter.num_bytes = num_superframe * bytes_per_superframe;
-    parameter.is_super_packet = (frame_per_superframe == 1) ? 0 : 1;
-    parameter.start_byte_offset = start_superframe * bytes_per_superframe;
-    parameter.start_skip = (start_sample - (start_superframe * samples_per_superframe));
-    parameter.end_skip = (start_superframe + num_superframe) * samples_per_superframe - (start_sample + num_samples);
-}
 
 void Atrac9Module::on_state_change(const MemState &mem, ModuleData &data, const VoiceState previous) {
     SceNgsAT9States *state = data.get_state<SceNgsAT9States>();
@@ -78,7 +49,7 @@ void Atrac9Module::on_state_change(const MemState &mem, ModuleData &data, const 
 void Atrac9Module::on_param_change(const MemState &mem, ModuleData &data) {
     SceNgsAT9States *state = data.get_state<SceNgsAT9States>();
     const SceNgsAT9Params *old_params = reinterpret_cast<SceNgsAT9Params *>(data.last_info.data());
-    const SceNgsAT9Params *new_params = reinterpret_cast<SceNgsAT9Params *>(data.info.data.get(mem));
+    const SceNgsAT9Params *new_params = static_cast<SceNgsAT9Params *>(data.info.data.get(mem));
 
     // if playback scaling changed, reset the resampler
     if (state->swr && (old_params->playback_frequency != new_params->playback_frequency || old_params->playback_scalar != new_params->playback_scalar)) {
@@ -157,10 +128,10 @@ bool Atrac9Module::decode_more_data(KernelState &kern, const MemState &mem, cons
     uint32_t frame_bytes_gotten = bufparam.bytes_count - state->current_byte_position_in_buffer;
     if (frame_bytes_gotten < superframe_size || !temp_buffer.empty()) {
         // the superframe overlaps two buffers...
-        uint32_t bytes_transfered = std::min<uint32_t>(frame_bytes_gotten, superframe_size - temp_buffer.size());
+        uint32_t bytes_transferred = std::min<uint32_t>(frame_bytes_gotten, superframe_size - temp_buffer.size());
         uint32_t old_size = temp_buffer.size();
-        temp_buffer.resize(old_size + bytes_transfered);
-        memcpy(temp_buffer.data() + old_size, input, bytes_transfered);
+        temp_buffer.resize(old_size + bytes_transferred);
+        memcpy(temp_buffer.data() + old_size, input, bytes_transferred);
 
         if (temp_buffer.size() < superframe_size) {
             // continue getting data
@@ -201,7 +172,7 @@ bool Atrac9Module::decode_more_data(KernelState &kern, const MemState &mem, cons
 
     // if the superframe is across two buffers, I don't know how to interpret the skipped samples (which are in the middle of the frame)...
     if (temp_buffer.empty()) {
-        // remove skipped samples at the beginnning and the end of the buffer
+        // remove skipped samples at the beginning and the end of the buffer
         // in case you have more than a superframe of samples skipped (I don't know if this can happen)
         const uint32_t sample_index = (state->current_byte_position_in_buffer / superframe_size) * samples_per_superframe;
         if (bufparam.samples_discard_start_off > sample_index) {
@@ -265,8 +236,8 @@ bool Atrac9Module::decode_more_data(KernelState &kern, const MemState &mem, cons
             swr = swr_stereo;
         }
 
-        const uint8_t *swr_data_in = reinterpret_cast<uint8_t *>(temporary_bytes.data());
-        uint8_t *swr_data_out = reinterpret_cast<uint8_t *>(decoded_superframe_samples.data() + decoded_superframe_pos);
+        const uint8_t *swr_data_in = temporary_bytes.data();
+        uint8_t *swr_data_out = decoded_superframe_samples.data() + decoded_superframe_pos;
         const int result = swr_convert(swr, &swr_data_out, decoder_size.samples, &swr_data_in, decoder_size.samples);
 
         decoded_superframe_pos += decoder_size.samples * sizeof(float) * 2;
@@ -280,7 +251,7 @@ bool Atrac9Module::decode_more_data(KernelState &kern, const MemState &mem, cons
 
         // resample the audio
         int src_sample_rate = static_cast<int>(params->playback_frequency);
-        if (params->playback_scalar != 1.0)
+        if (params->playback_scalar != 1.0f)
             src_sample_rate *= params->playback_scalar;
 
         if (!state->swr) {

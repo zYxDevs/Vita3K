@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,7 +17,6 @@
 
 #pragma once
 
-#include <functional>
 #include <memory>
 #include <thread>
 
@@ -27,7 +26,7 @@
 
 #ifdef _WIN32
 typedef SOCKET socket_t;
-constexpr socket_t BAD_SOCK = (socket_t)~0;
+constexpr socket_t BAD_SOCK = INVALID_SOCKET;
 #else
 typedef int32_t socket_t;
 constexpr socket_t BAD_SOCK = -1;

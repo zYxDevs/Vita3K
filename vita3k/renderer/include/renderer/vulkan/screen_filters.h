@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,9 +19,11 @@
 
 #include <vkutil/objects.h>
 
+#include <string_view>
+#include <vector>
+
 namespace renderer::vulkan {
 
-struct VKState;
 class ScreenRenderer;
 struct Viewport;
 

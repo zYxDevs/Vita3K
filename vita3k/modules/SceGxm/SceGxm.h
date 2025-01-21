@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,4 +20,9 @@
 #include <module/module.h>
 
 struct SceGxmInitializeParams;
+struct SceGxmRenderTargetParams;
+struct SceGxmRenderTarget;
+
 DECL_EXPORT(int, sceGxmInitialize, const SceGxmInitializeParams *params);
+DECL_EXPORT(int, sceGxmCreateRenderTarget, const SceGxmRenderTargetParams *params, Ptr<SceGxmRenderTarget> *renderTarget);
+DECL_EXPORT(int, sceGxmGetRenderTargetMemSize, const SceGxmRenderTargetParams *params, uint32_t *hostMemSize);

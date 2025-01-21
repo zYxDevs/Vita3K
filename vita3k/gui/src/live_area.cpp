@@ -1,5 +1,5 @@
 ﻿// Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,13 +19,12 @@
 
 #include <config/state.h>
 #include <ctrl/ctrl.h>
+#include <dialog/state.h>
 #include <gui/functions.h>
 #include <io/state.h>
 #include <kernel/state.h>
-#include <packages/functions.h>
+#include <packages/license.h>
 #include <renderer/state.h>
-
-#include <util/safe_time.h>
 
 #include <io/VitaIoDevice.h>
 #include <io/vfs.h>
@@ -61,7 +60,6 @@ static std::map<std::string, std::map<std::string, std::map<std::string, ImVec2>
 static std::map<std::string, std::map<std::string, std::string>> target;
 static std::map<std::string, std::map<std::string, uint64_t>> current_item, last_time;
 static std::map<std::string, std::string> type;
-static std::map<std::string, int32_t> sku_flag;
 
 struct Items {
     ImVec2 gate_pos;
@@ -152,28 +150,28 @@ static std::map<std::string, Items> items_styles = {
 // clang-format on
 
 void init_live_area(GuiState &gui, EmuEnvState &emuenv, const std::string &app_path) {
-    const auto live_area_lang = gui.lang.user_lang[LIVE_AREA];
+    const auto &live_area_lang = gui.lang.user_lang[LIVE_AREA];
     const auto is_sys_app = app_path.starts_with("NPXS") && (app_path != "NPXS10007");
     const auto is_ps_app = app_path.starts_with("PCS") || (app_path == "NPXS10007");
     const VitaIoDevice app_device = is_sys_app ? VitaIoDevice::vs0 : VitaIoDevice::ux0;
     const auto APP_INDEX = get_app_index(gui, app_path);
+    const auto TITLE_ID = APP_INDEX->title_id;
 
-    if (is_ps_app && !sku_flag.contains(app_path))
-        sku_flag[app_path] = get_license_sku_flag(emuenv, APP_INDEX->content_id);
+    get_license(emuenv, APP_INDEX->title_id, APP_INDEX->content_id);
 
     if (!gui.live_area_contents.contains(app_path)) {
         auto default_contents = false;
         const auto fw_path{ emuenv.pref_path / "vs0" };
         const auto default_fw_contents{ fw_path / "data/internal/livearea/default/sce_sys/livearea/contents/template.xml" };
         const auto APP_PATH{ emuenv.pref_path / app_device._to_string() / "app" / app_path };
-        const auto live_area_path{ fs::path("sce_sys") / ((sku_flag[app_path] == 3) && fs::exists(APP_PATH / "sce_sys/retail/livearea") ? "retail/livearea" : "livearea") };
+        const auto live_area_path{ fs::path("sce_sys") / ((emuenv.license.rif[TITLE_ID].sku_flag == 3) && fs::exists(APP_PATH / "sce_sys/retail/livearea") ? "retail/livearea" : "livearea") };
         auto template_xml{ APP_PATH / live_area_path / "contents/template.xml" };
 
         pugi::xml_document doc;
 
         if (!doc.load_file(template_xml.c_str())) {
             if (is_ps_app || is_sys_app)
-                LOG_WARN("Live Area Contents is corrupted or missing for title: {} '{}' in path: {}.", APP_INDEX->title_id, APP_INDEX->title, template_xml.string());
+                LOG_WARN("Live Area Contents is corrupted or missing for title: {} '{}' in path: {}.", APP_INDEX->title_id, APP_INDEX->title, template_xml);
             if (doc.load_file(default_fw_contents.c_str())) {
                 template_xml = default_fw_contents;
                 default_contents = true;
@@ -253,11 +251,11 @@ void init_live_area(GuiState &gui, EmuEnvState &emuenv, const std::string &app_p
                 }
 
                 if (default_contents)
-                    vfs::read_file(VitaIoDevice::vs0, buffer, emuenv.pref_path.wstring(), "data/internal/livearea/default/sce_sys/livearea/contents/" + contents.second);
+                    vfs::read_file(VitaIoDevice::vs0, buffer, emuenv.pref_path, "data/internal/livearea/default/sce_sys/livearea/contents/" + contents.second);
                 else if (app_device == VitaIoDevice::vs0)
-                    vfs::read_file(VitaIoDevice::vs0, buffer, emuenv.pref_path.wstring(), "app/" + app_path + "/sce_sys/livearea/contents/" + contents.second);
+                    vfs::read_file(VitaIoDevice::vs0, buffer, emuenv.pref_path, "app/" + app_path + "/sce_sys/livearea/contents/" + contents.second);
                 else
-                    vfs::read_app_file(buffer, emuenv.pref_path.wstring(), app_path, live_area_path.string() + "/contents/" + contents.second);
+                    vfs::read_app_file(buffer, emuenv.pref_path, app_path, live_area_path / "contents" / contents.second);
 
                 if (buffer.empty()) {
                     if (is_ps_app || is_sys_app)
@@ -325,8 +323,8 @@ void init_live_area(GuiState &gui, EmuEnvState &emuenv, const std::string &app_p
                             liveitem[app_path][frame]["text"]["y"].first = livearea.child("liveitem").child("text").attribute("y").as_int();
                         if (!livearea.child("liveitem").child("text").attribute("margin-top").empty())
                             liveitem[app_path][frame]["text"]["margin-top"].first = livearea.child("liveitem").child("text").attribute("margin-top").as_int();
-                        if (!livearea.child("liveitem").child("text").attribute("margin-buttom").empty())
-                            liveitem[app_path][frame]["text"]["margin-buttom"].first = livearea.child("liveitem").child("text").attribute("margin-buttom").as_int();
+                        if (!livearea.child("liveitem").child("text").attribute("margin-bottom").empty())
+                            liveitem[app_path][frame]["text"]["margin-bottom"].first = livearea.child("liveitem").child("text").attribute("margin-bottom").as_int();
                         if (!livearea.child("liveitem").child("text").attribute("margin-left").empty())
                             liveitem[app_path][frame]["text"]["margin-left"].first = livearea.child("liveitem").child("text").attribute("margin-left").as_int();
                         if (!livearea.child("liveitem").child("text").attribute("margin-right").empty())
@@ -443,9 +441,9 @@ void init_live_area(GuiState &gui, EmuEnvState &emuenv, const std::string &app_p
                             vfs::FileBuffer buffer;
 
                             if (app_device == VitaIoDevice::vs0)
-                                vfs::read_file(VitaIoDevice::vs0, buffer, emuenv.pref_path.wstring(), "app/" + app_path + "/sce_sys/livearea/contents/" + bg_name);
+                                vfs::read_file(VitaIoDevice::vs0, buffer, emuenv.pref_path, fmt::format("app/{}/sce_sys/livearea/contents/{}", app_path, bg_name));
                             else
-                                vfs::read_app_file(buffer, emuenv.pref_path.wstring(), app_path, live_area_path.string() + "/contents/" + bg_name);
+                                vfs::read_app_file(buffer, emuenv.pref_path, app_path, live_area_path / "contents" / bg_name);
 
                             if (buffer.empty()) {
                                 if (is_ps_app || is_sys_app)
@@ -475,9 +473,9 @@ void init_live_area(GuiState &gui, EmuEnvState &emuenv, const std::string &app_p
                             vfs::FileBuffer buffer;
 
                             if (app_device == VitaIoDevice::vs0)
-                                vfs::read_file(VitaIoDevice::vs0, buffer, emuenv.pref_path.wstring(), "app/" + app_path + "/sce_sys/livearea/contents/" + img_name);
+                                vfs::read_file(VitaIoDevice::vs0, buffer, emuenv.pref_path, fmt::format("app/{}/sce_sys/livearea/contents/{}", app_path, img_name));
                             else
-                                vfs::read_app_file(buffer, emuenv.pref_path.wstring(), app_path, live_area_path.string() + "/contents/" + img_name);
+                                vfs::read_app_file(buffer, emuenv.pref_path, app_path, live_area_path / "contents" / img_name);
 
                             if (buffer.empty()) {
                                 if (is_ps_app || is_sys_app)
@@ -551,7 +549,7 @@ enum LiveAreaType {
     MANUAL,
 };
 
-static const ImU32 ARROW_COLOR = 0xFFFFFFFF; // White
+static constexpr ImU32 ARROW_COLOR = 0xFFFFFFFF; // White
 static LiveAreaType live_area_type_selected = GATE;
 
 void browse_live_area_apps_list(GuiState &gui, EmuEnvState &emuenv, const uint32_t button) {
@@ -633,21 +631,24 @@ void browse_live_area_apps_list(GuiState &gui, EmuEnvState &emuenv, const uint32
 }
 
 void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
-    const ImVec2 VIEWPORT_SIZE(emuenv.viewport_size.x, emuenv.viewport_size.y);
-    const ImVec2 VIEWPORT_POS(emuenv.viewport_pos.x, emuenv.viewport_pos.y);
-    const auto RES_SCALE = ImVec2(VIEWPORT_SIZE.x / emuenv.res_width_dpi_scale, VIEWPORT_SIZE.y / emuenv.res_height_dpi_scale);
-    const auto SCALE = ImVec2(RES_SCALE.x * emuenv.dpi_scale, RES_SCALE.y * emuenv.dpi_scale);
+    const ImVec2 VIEWPORT_SIZE(emuenv.logical_viewport_size.x, emuenv.logical_viewport_size.y);
+    const ImVec2 VIEWPORT_POS(emuenv.logical_viewport_pos.x, emuenv.logical_viewport_pos.y);
+    const auto RES_SCALE = ImVec2(emuenv.gui_scale.x, emuenv.gui_scale.y);
+    const auto SCALE = ImVec2(RES_SCALE.x * emuenv.manual_dpi_scale, RES_SCALE.y * emuenv.manual_dpi_scale);
 
-    const auto app_path = gui.live_area_current_open_apps_list[gui.live_area_app_current_open];
+    const auto &app_path = gui.live_area_current_open_apps_list[gui.live_area_app_current_open];
     const VitaIoDevice app_device = app_path.starts_with("NPXS") ? VitaIoDevice::vs0 : VitaIoDevice::ux0;
 
-    ImGui::SetNextWindowPos(VIEWPORT_POS, ImGuiCond_Always);
-    ImGui::SetNextWindowSize(VIEWPORT_SIZE, ImGuiCond_Always);
+    const auto INFO_BAR_HEIGHT = 32.f * SCALE.y;
+
+    const ImVec2 WINDOW_SIZE(VIEWPORT_SIZE.x, VIEWPORT_SIZE.y - INFO_BAR_HEIGHT);
+    const ImVec2 WINDOW_POS(VIEWPORT_POS.x, VIEWPORT_POS.y + INFO_BAR_HEIGHT);
+    ImGui::SetNextWindowPos(WINDOW_POS, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(WINDOW_SIZE, ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::SetNextWindowBgAlpha(0.3f);
-    auto flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings;
+    auto flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings;
     if (gui.is_nav_button)
         flags |= ImGuiWindowFlags_NoMouseInputs;
     ImGui::Begin("##live_area", &gui.vita_area.live_area_screen, flags);
@@ -656,7 +657,7 @@ void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
     draw_background(gui, emuenv);
 
     const auto background_pos = ImVec2(900.0f * SCALE.x, 500.0f * SCALE.y);
-    const auto pos_bg = ImVec2(VIEWPORT_POS.x + VIEWPORT_SIZE.x - background_pos.x, VIEWPORT_POS.y + VIEWPORT_SIZE.y - background_pos.y);
+    const auto pos_bg = ImVec2(WINDOW_POS.x + WINDOW_SIZE.x - background_pos.x, WINDOW_POS.y + WINDOW_SIZE.y - background_pos.y);
     const auto background_size = ImVec2(840.0f * SCALE.x, 500.0f * SCALE.y);
 
     const auto window_draw_list = ImGui::GetWindowDrawList();
@@ -666,7 +667,7 @@ void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
     else
         window_draw_list->AddRectFilled(pos_bg, ImVec2(pos_bg.x + background_size.x, pos_bg.y + background_size.y), IM_COL32(148.f, 164.f, 173.f, 255.f), 0.f, ImDrawFlags_RoundCornersAll);
 
-    const auto app_type = type[app_path];
+    const auto &app_type = type[app_path];
     LOG_WARN_IF(!items_styles.contains(app_type), "Type of style {} no found for: {}", app_type, app_path);
 
     for (const auto &frame : frames[app_path]) {
@@ -719,7 +720,7 @@ void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
         auto bg_pos_init = ImVec2((FRAME_SIZE.x - bg_size.x) / 2.f, (FRAME_SIZE.y - bg_size.y) / 2.f);
         auto img_pos_init = ImVec2((FRAME_SIZE.x - img_size.x) / 2.f, (FRAME_SIZE.y - img_size.y) / 2.f);
 
-        // Allign items
+        // Align items
         if ((liveitem[app_path][frame.id]["background"]["align"].second == "left") && (liveitem[app_path][frame.id]["background"]["x"].first >= 0))
             bg_pos_init.x = 0.0f;
         else if ((liveitem[app_path][frame.id]["background"]["align"].second == "right") && (liveitem[app_path][frame.id]["background"]["x"].first <= 0))
@@ -750,27 +751,27 @@ void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
             img_pos_init.y -= liveitem[app_path][frame.id]["image"]["y"].first;
 
         // Set items pos
-        auto bg_pos = ImVec2((VIEWPORT_SIZE.x - FRAME_POS.x) + (bg_pos_init.x * SCALE.x), (VIEWPORT_SIZE.y - FRAME_POS.y) + (bg_pos_init.y * SCALE.y));
+        auto bg_pos = ImVec2((WINDOW_SIZE.x - FRAME_POS.x) + (bg_pos_init.x * SCALE.x), (WINDOW_SIZE.y - FRAME_POS.y) + (bg_pos_init.y * SCALE.y));
 
-        auto img_pos = ImVec2((VIEWPORT_SIZE.x - FRAME_POS.x) + (img_pos_init.x * SCALE.x), (VIEWPORT_SIZE.y - FRAME_POS.y) + (img_pos_init.y * SCALE.y));
+        auto img_pos = ImVec2((WINDOW_SIZE.x - FRAME_POS.x) + (img_pos_init.x * SCALE.x), (WINDOW_SIZE.y - FRAME_POS.y) + (img_pos_init.y * SCALE.y));
 
         if (bg_size.x == FRAME_SIZE.x)
-            bg_pos.x = VIEWPORT_SIZE.x - FRAME_POS.x;
+            bg_pos.x = WINDOW_SIZE.x - FRAME_POS.x;
         if (bg_size.y == FRAME_SIZE.y)
-            bg_pos.y = VIEWPORT_SIZE.y - FRAME_POS.y;
+            bg_pos.y = WINDOW_SIZE.y - FRAME_POS.y;
 
         if (img_size.x == FRAME_SIZE.x)
-            img_pos.x = VIEWPORT_SIZE.x - FRAME_POS.x;
+            img_pos.x = WINDOW_SIZE.x - FRAME_POS.x;
         if (img_size.y == FRAME_SIZE.y)
-            img_pos.y = VIEWPORT_SIZE.y - FRAME_POS.y;
+            img_pos.y = WINDOW_SIZE.y - FRAME_POS.y;
 
-        // Scal size items
+        // Scale size items
         const auto bg_scal_size = ImVec2(bg_size.x * SCALE.x, bg_size.y * SCALE.y);
         const auto img_scal_size = ImVec2(img_size.x * SCALE.x, img_size.y * SCALE.y);
 
-        const auto pos_frame = ImVec2(VIEWPORT_SIZE.x - FRAME_POS.x, VIEWPORT_SIZE.y - FRAME_POS.y);
+        const auto pos_frame = ImVec2(WINDOW_SIZE.x - FRAME_POS.x, WINDOW_SIZE.y - FRAME_POS.y);
 
-        // Scal size frame
+        // Scale size frame
         const auto scal_size_frame = ImVec2(FRAME_SIZE.x * SCALE.x, FRAME_SIZE.y * SCALE.y);
 
         // Reset position if get outside frame
@@ -834,19 +835,25 @@ void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
 
                 // Origin
                 if (liveitem[app_path][frame.id]["text"]["origin"].second.empty() || (liveitem[app_path][frame.id]["text"]["origin"].second == "background")) {
-                    if (gui.live_items[app_path][frame.id].contains("background"))
-                        str_size = bg_scal_size, text_pos = bg_pos;
-                    else if (!liveitem[app_path][frame.id]["text"]["origin"].second.empty() && gui.live_items[app_path][frame.id].contains("image"))
-                        str_size = img_scal_size, text_pos = img_pos;
+                    if (gui.live_items[app_path][frame.id].contains("background")) {
+                        str_size = bg_scal_size;
+                        text_pos = bg_pos;
+                    } else if (!liveitem[app_path][frame.id]["text"]["origin"].second.empty() && gui.live_items[app_path][frame.id].contains("image")) {
+                        str_size = img_scal_size;
+                        text_pos = img_pos;
+                    }
                 } else if (liveitem[app_path][frame.id]["text"]["origin"].second == "image") {
-                    if (gui.live_items[app_path][frame.id].contains("image"))
-                        str_size = img_scal_size, text_pos = img_pos;
-                    else if (gui.live_items[app_path][frame.id].contains("background"))
-                        str_size = bg_scal_size, text_pos = bg_pos;
+                    if (gui.live_items[app_path][frame.id].contains("image")) {
+                        str_size = img_scal_size;
+                        text_pos = img_pos;
+                    } else if (gui.live_items[app_path][frame.id].contains("background")) {
+                        str_size = bg_scal_size;
+                        text_pos = bg_pos;
+                    }
                 }
 
                 auto str_wrap = scal_size_frame.x;
-                if (liveitem[app_path][frame.id]["text"]["allign"].second == "outside-right")
+                if (liveitem[app_path][frame.id]["text"]["align"].second == "outside-right")
                     str_wrap = str_size.x;
 
                 if (liveitem[app_path][frame.id]["text"]["width"].first > 0) {
@@ -865,7 +872,7 @@ void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
                 const auto size_text_scale = str_tag.size != 0 ? str_tag.size / 19.2f : 1.f;
                 ImGui::SetWindowFontScale(size_text_scale * RES_SCALE.x);
 
-                // Calcule text pixel size
+                // Calculate text pixel size
                 ImVec2 calc_text_size;
                 if (frame.autoflip > 0) {
                     if (liveitem[app_path][frame.id]["text"]["word-wrap"].second != "off")
@@ -885,7 +892,7 @@ void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
 
                 ImVec2 str_pos_init;
 
-                // Allign
+                // Align
                 if (liveitem[app_path][frame.id]["text"]["align"].second.empty()) {
                     if (liveitem[app_path][frame.id]["text"]["text-align"].second.empty()) {
                         if (liveitem[app_path][frame.id]["text"]["line-align"].second == "left")
@@ -897,8 +904,10 @@ void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
                             if (liveitem[app_path][frame.id]["text"]["origin"].second == "image") {
                                 if (gui.live_items[app_path][frame.id].contains("background"))
                                     str_size.x = bg_scal_size.x - img_scal_size.x - (img_pos.x - bg_pos.x);
-                                else
-                                    str_size = scal_size_frame, text_pos = pos_frame;
+                                else {
+                                    str_size = scal_size_frame;
+                                    text_pos = pos_frame;
+                                }
                             }
                         } else
                             str_pos_init.x = (str_size.x - calc_text_size.x) / 2.0f;
@@ -915,8 +924,10 @@ void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
                             if (liveitem[app_path][frame.id]["text"]["origin"].second == "image") {
                                 if (gui.live_items[app_path][frame.id].contains("background"))
                                     str_size.x = bg_scal_size.x - img_scal_size.x - (img_pos.x - bg_pos.x);
-                                else
-                                    str_size = scal_size_frame, text_pos = pos_frame;
+                                else {
+                                    str_size = scal_size_frame;
+                                    text_pos = pos_frame;
+                                }
                             }
                         }
                     }
@@ -932,8 +943,10 @@ void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
                         if (liveitem[app_path][frame.id]["text"]["origin"].second == "image") {
                             if (gui.live_items[app_path][frame.id].contains("background"))
                                 str_size.x = bg_scal_size.x - img_scal_size.x - (img_pos.x - bg_pos.x);
-                            else
-                                str_size = scal_size_frame, text_pos = pos_frame;
+                            else {
+                                str_size = scal_size_frame;
+                                text_pos = pos_frame;
+                            }
                         }
                     }
                 }
@@ -981,10 +994,10 @@ void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
                 }
 
                 // Text Display
-                // TODO Multible color support on same frame, used by eg: Asphalt: Injection
+                // TODO Multiple color support on same frame, used by eg: Asphalt: Injection
                 // TODO Correct display few line on same frame, used by eg: Asphalt: Injection
-                ImGui::SetNextWindowPos(ImVec2(VIEWPORT_POS.x + text_pos.x, VIEWPORT_POS.y + text_pos.y));
-                ImGui::BeginChild(frame.id.c_str(), str_size, false, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings);
+                ImGui::SetNextWindowPos(ImVec2(WINDOW_POS.x + text_pos.x, WINDOW_POS.y + text_pos.y));
+                ImGui::BeginChild(frame.id.c_str(), str_size, ImGuiChildFlags_None, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings);
                 if (liveitem[app_path][frame.id]["text"]["word-wrap"].second != "off")
                     ImGui::PushTextWrapPos(str_wrap);
                 if (liveitem[app_path][frame.id]["text"]["word-scroll"].second == "on") {
@@ -1031,24 +1044,23 @@ void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
     }
 
     ImGui::SetWindowFontScale(RES_SCALE.x);
-    const auto default_font_scale = (25.f * emuenv.dpi_scale) * (ImGui::GetFontSize() / (19.2f * emuenv.dpi_scale));
+    const auto default_font_scale = (25.f * emuenv.manual_dpi_scale) * (ImGui::GetFontSize() / (19.2f * emuenv.manual_dpi_scale));
     const auto font_size_scale = default_font_scale / ImGui::GetFontSize();
 
     const auto gate_pos = items_styles[app_type].gate_pos;
     const std::string BUTTON_STR = app_path == emuenv.io.title_id ? gui.lang.live_area.main["continue"] : gui.lang.live_area.main["start"];
 
     const auto GATE_SIZE = ImVec2(280.0f * SCALE.x, 158.0f * SCALE.y);
-    const auto GATE_POS = ImVec2(VIEWPORT_SIZE.x - (gate_pos.x * SCALE.x), VIEWPORT_SIZE.y - (gate_pos.y * SCALE.y));
-    const ImVec2 GATE_POS_MIN(VIEWPORT_POS.x + GATE_POS.x, VIEWPORT_POS.y + GATE_POS.y);
+    const auto GATE_POS = ImVec2(WINDOW_SIZE.x - (gate_pos.x * SCALE.x), WINDOW_SIZE.y - (gate_pos.y * SCALE.y));
+    const ImVec2 GATE_POS_MIN(WINDOW_POS.x + GATE_POS.x, WINDOW_POS.y + GATE_POS.y);
     const ImVec2 GATE_POS_MAX(GATE_POS_MIN.x + GATE_SIZE.x, GATE_POS_MIN.y + GATE_SIZE.y);
 
     const auto START_SIZE = ImVec2((ImGui::CalcTextSize(BUTTON_STR.c_str()).x * font_size_scale), (ImGui::CalcTextSize(BUTTON_STR.c_str()).y * font_size_scale));
     const auto START_BUTTON_SIZE = ImVec2(START_SIZE.x + 26.0f * SCALE.x, START_SIZE.y + 5.0f * SCALE.y);
     const auto POS_BUTTON = ImVec2((GATE_POS.x + (GATE_SIZE.x - START_BUTTON_SIZE.x) / 2.0f), (GATE_POS.y + (GATE_SIZE.y - START_BUTTON_SIZE.y) / 1.08f));
-    const auto POS_START = ImVec2(VIEWPORT_POS.x + POS_BUTTON.x + (START_BUTTON_SIZE.x - START_SIZE.x) / 2.f, VIEWPORT_POS.y + POS_BUTTON.y + (START_BUTTON_SIZE.y - START_SIZE.y) / 2.f);
+    const auto POS_START = ImVec2(WINDOW_POS.x + POS_BUTTON.x + (START_BUTTON_SIZE.x - START_SIZE.x) / 2.f, WINDOW_POS.y + POS_BUTTON.y + (START_BUTTON_SIZE.y - START_SIZE.y) / 2.f);
     const auto SELECT_SIZE = ImVec2(GATE_SIZE.x - (10.f * SCALE.x), GATE_SIZE.y - (5.f * SCALE.y));
     const auto SELECT_POS = ImVec2(GATE_POS.x + (5.f * SCALE.y), GATE_POS.y + (2.f * SCALE.y));
-    const auto SIZE_GATE = ImVec2(GATE_POS.x + GATE_SIZE.x, GATE_POS.y + GATE_SIZE.y);
 
     const auto BUTTON_SIZE = ImVec2(72.f * SCALE.x, 30.f * SCALE.y);
 
@@ -1061,7 +1073,7 @@ void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
 
         const auto ICON_SIZE_SCALE = 94.f * SCALE.x;
         const auto ICON_CENTER_POS = ImVec2(GATE_POS_MIN.x + (GATE_SIZE.x / 2.f), GATE_POS_MIN.y + (15.5f * SCALE.y) + (ICON_SIZE_SCALE / 2.f));
-        const auto ICON_POS_MINI_SCALE = ImVec2(ICON_CENTER_POS.x - (ICON_SIZE_SCALE / 2.f), GATE_POS.y + (15.5f * SCALE.y));
+        const auto ICON_POS_MINI_SCALE = ImVec2(ICON_CENTER_POS.x - (ICON_SIZE_SCALE / 2.f), ICON_CENTER_POS.y - (ICON_SIZE_SCALE / 2.f));
         const auto ICON_POS_MAX_SCALE = ImVec2(ICON_POS_MINI_SCALE.x + ICON_SIZE_SCALE, ICON_POS_MINI_SCALE.y + ICON_SIZE_SCALE);
 
         // check if app icon exist
@@ -1073,9 +1085,9 @@ void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
             window_draw_list->AddCircleFilled(ICON_CENTER_POS, ICON_SIZE_SCALE / 2.f, IM_COL32_WHITE);
     }
     ImGui::PushID(app_path.c_str());
-    const ImVec2 BUTTON_POS_MIN(VIEWPORT_POS.x + POS_BUTTON.x, VIEWPORT_POS.y + POS_BUTTON.y);
+    const ImVec2 BUTTON_POS_MIN(WINDOW_POS.x + POS_BUTTON.x, WINDOW_POS.y + POS_BUTTON.y);
     window_draw_list->AddRectFilled(BUTTON_POS_MIN, ImVec2(BUTTON_POS_MIN.x + START_BUTTON_SIZE.x, BUTTON_POS_MIN.y + START_BUTTON_SIZE.y), IM_COL32(20, 168, 222, 255), 10.0f * SCALE.x, ImDrawFlags_RoundCornersAll);
-    window_draw_list->AddText(gui.vita_font, default_font_scale, POS_START, IM_COL32(255, 255, 255, 255), BUTTON_STR.c_str());
+    window_draw_list->AddText(gui.vita_font[emuenv.current_font_level], default_font_scale, POS_START, IM_COL32(255, 255, 255, 255), BUTTON_STR.c_str());
     ImGui::SetCursorPos(SELECT_POS);
     if (ImGui::Selectable("##gate", gui.is_nav_button && (live_area_type_selected == GATE), ImGuiSelectableFlags_None, SELECT_SIZE))
         pre_run_app(gui, emuenv, app_path);
@@ -1089,44 +1101,44 @@ void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
 
         const auto manual_exist = fs::exists(manual_path) && !fs::is_empty(manual_path);
         const auto search_pos = ImVec2((manual_exist ? 633.f : 578.f) * SCALE.x, 505.0f * SCALE.y);
-        const auto pos_scal_search = ImVec2(VIEWPORT_SIZE.x - search_pos.x, VIEWPORT_SIZE.y - search_pos.y);
-        const ImVec2 SEARCH_WIDGET_POS_MIN(VIEWPORT_POS.x + pos_scal_search.x, VIEWPORT_POS.y + pos_scal_search.y);
+        const auto pos_scal_search = ImVec2(WINDOW_SIZE.x - search_pos.x, WINDOW_SIZE.y - search_pos.y);
+        const ImVec2 SEARCH_WIDGET_POS_MIN(WINDOW_POS.x + pos_scal_search.x, WINDOW_POS.y + pos_scal_search.y);
         const char *SEARCH_STR = "Search";
         const auto SEARCH_SCAL_SIZE = ImVec2((ImGui::CalcTextSize(SEARCH_STR).x * scal_widget_font_size) * SCALE.x, (ImGui::CalcTextSize(SEARCH_STR).y * scal_widget_font_size) * SCALE.y);
         const auto POS_STR_SEARCH = ImVec2(SEARCH_WIDGET_POS_MIN.x + ((widget_scal_size.x / 2.f) - (SEARCH_SCAL_SIZE.x / 2.f)),
             SEARCH_WIDGET_POS_MIN.y + ((widget_scal_size.x / 2.f) - (SEARCH_SCAL_SIZE.y / 2.f)));
         window_draw_list->AddRectFilled(SEARCH_WIDGET_POS_MIN, ImVec2(SEARCH_WIDGET_POS_MIN.x + widget_scal_size.x, SEARCH_WIDGET_POS_MIN.y + widget_scal_size.y), IM_COL32(10, 169, 246, 255), 12.0f * SCALE.x, ImDrawFlags_RoundCornersAll);
-        window_draw_list->AddText(gui.vita_font, 23.0f * SCALE.x, POS_STR_SEARCH, IM_COL32(255, 255, 255, 255), SEARCH_STR);
+        window_draw_list->AddText(gui.vita_font[emuenv.current_font_level], 23.0f * SCALE.x, POS_STR_SEARCH, IM_COL32(255, 255, 255, 255), SEARCH_STR);
         ImGui::SetCursorPos(pos_scal_search);
         if (ImGui::Selectable("##Search", gui.is_nav_button && (live_area_type_selected == SEARCH), ImGuiSelectableFlags_None, widget_scal_size))
             open_search(get_app_index(gui, app_path)->title);
 
         if (manual_exist) {
             const auto manual_pos = ImVec2(520.f * SCALE.x, 505.0f * SCALE.y);
-            const auto pos_scal_manual = ImVec2(VIEWPORT_SIZE.x - manual_pos.x, VIEWPORT_SIZE.y - manual_pos.y);
+            const auto pos_scal_manual = ImVec2(WINDOW_SIZE.x - manual_pos.x, WINDOW_SIZE.y - manual_pos.y);
 
             const char *MANUAL_STR = "Manual";
             const auto MANUAL_STR_SCAL_SIZE = ImVec2((ImGui::CalcTextSize(MANUAL_STR).x * scal_widget_font_size) * SCALE.x, (ImGui::CalcTextSize(MANUAL_STR).y * scal_widget_font_size) * SCALE.y);
-            const ImVec2 MANUAL_WIDGET_POS_MIN(VIEWPORT_POS.x + pos_scal_manual.x, VIEWPORT_POS.y + pos_scal_manual.y);
+            const ImVec2 MANUAL_WIDGET_POS_MIN(WINDOW_POS.x + pos_scal_manual.x, WINDOW_POS.y + pos_scal_manual.y);
             const auto MANUAL_STR_POS = ImVec2(MANUAL_WIDGET_POS_MIN.x + ((widget_scal_size.x / 2.f) - (MANUAL_STR_SCAL_SIZE.x / 2.f)),
                 MANUAL_WIDGET_POS_MIN.y + ((widget_scal_size.x / 2.f) - (MANUAL_STR_SCAL_SIZE.y / 2.f)));
             window_draw_list->AddRectFilled(MANUAL_WIDGET_POS_MIN, ImVec2(MANUAL_WIDGET_POS_MIN.x + widget_scal_size.x, MANUAL_WIDGET_POS_MIN.y + widget_scal_size.y), IM_COL32(202, 0, 106, 255), 12.0f * SCALE.x, ImDrawFlags_RoundCornersAll);
-            window_draw_list->AddText(gui.vita_font, 23.0f * SCALE.x, MANUAL_STR_POS, IM_COL32(255, 255, 255, 255), MANUAL_STR);
+            window_draw_list->AddText(gui.vita_font[emuenv.current_font_level], 23.0f * SCALE.x, MANUAL_STR_POS, IM_COL32(255, 255, 255, 255), MANUAL_STR);
             ImGui::SetCursorPos(pos_scal_manual);
             if (ImGui::Selectable("##manual", gui.is_nav_button && (live_area_type_selected == MANUAL), ImGuiSelectableFlags_None, widget_scal_size))
                 open_manual(gui, emuenv, app_path);
         }
 
         const auto update_pos = ImVec2((manual_exist ? 408.f : 463.f) * SCALE.x, 505.0f * SCALE.y);
-        const auto pos_scal_update = ImVec2(VIEWPORT_SIZE.x - update_pos.x, VIEWPORT_SIZE.y - update_pos.y);
+        const auto pos_scal_update = ImVec2(WINDOW_SIZE.x - update_pos.x, WINDOW_SIZE.y - update_pos.y);
 
         const auto UPDATE_STR = "Update";
         const auto UPDATE_STR_SCAL_SIZE = ImVec2((ImGui::CalcTextSize(UPDATE_STR).x * scal_widget_font_size) * SCALE.x, (ImGui::CalcTextSize(UPDATE_STR).y * scal_widget_font_size) * SCALE.y);
-        const ImVec2 UPDATE_WIDGET_POS_MIN(VIEWPORT_POS.x + pos_scal_update.x, VIEWPORT_POS.y + pos_scal_update.y);
+        const ImVec2 UPDATE_WIDGET_POS_MIN(WINDOW_POS.x + pos_scal_update.x, WINDOW_POS.y + pos_scal_update.y);
         const auto UPDATE_STR_POS = ImVec2(UPDATE_WIDGET_POS_MIN.x + ((widget_scal_size.x / 2.f) - (UPDATE_STR_SCAL_SIZE.x / 2.f)),
             UPDATE_WIDGET_POS_MIN.y + ((widget_scal_size.x / 2.f) - (UPDATE_STR_SCAL_SIZE.y / 2.f)));
         window_draw_list->AddRectFilled(UPDATE_WIDGET_POS_MIN, ImVec2(UPDATE_WIDGET_POS_MIN.x + widget_scal_size.x, UPDATE_WIDGET_POS_MIN.y + widget_scal_size.y), IM_COL32(3, 187, 250, 255), 12.0f * SCALE.x, ImDrawFlags_RoundCornersAll);
-        window_draw_list->AddText(gui.vita_font, 23.0f * SCALE.x, UPDATE_STR_POS, IM_COL32(255, 255, 255, 255), UPDATE_STR);
+        window_draw_list->AddText(gui.vita_font[emuenv.current_font_level], 23.0f * SCALE.x, UPDATE_STR_POS, IM_COL32(255, 255, 255, 255), UPDATE_STR);
         ImGui::SetCursorPos(pos_scal_update);
         if (ImGui::Selectable("##update", ImGuiSelectableFlags_None, false, widget_scal_size))
             update_app(gui, emuenv, app_path);
@@ -1137,31 +1149,25 @@ void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
 
     if (!gui.vita_area.content_manager && !gui.vita_area.manual) {
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.f * SCALE.x);
-        ImGui::SetCursorPos(ImVec2(VIEWPORT_SIZE.x - (60.0f * SCALE.x) - BUTTON_SIZE.x, 44.0f * SCALE.y));
+        ImGui::SetCursorPos(ImVec2(WINDOW_SIZE.x - (60.0f * SCALE.x) - BUTTON_SIZE.x, 12.0f * SCALE.y));
         if (ImGui::Button("Esc", BUTTON_SIZE))
             close_live_area_app(gui, emuenv, app_path);
-        ImGui::SetCursorPos(ImVec2(60.f * SCALE.x, 44.0f * SCALE.y));
+        ImGui::SetCursorPos(ImVec2(60.f * SCALE.x, 12.0f * SCALE.y));
         if (ImGui::Button("Help", BUTTON_SIZE))
             ImGui::OpenPopup("Live Area Help");
-        ImGui::SetNextWindowPos(ImVec2(VIEWPORT_SIZE.x / 2.f, VIEWPORT_SIZE.y / 2.f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+        ImGui::SetNextWindowPos(ImVec2(WINDOW_SIZE.x / 2.f, WINDOW_SIZE.y / 2.f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
         if (ImGui::BeginPopupModal("Live Area Help", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings)) {
-            auto help_str = gui.lang.main_menubar.help["title"].c_str();
-            ImGui::SetCursorPosX(ImGui::GetWindowWidth() / 2.f - (ImGui::CalcTextSize(help_str).x / 2.f));
-            ImGui::TextColored(GUI_COLOR_TEXT_TITLE, "%s", help_str);
+            TextColoredCentered(GUI_COLOR_TEXT_TITLE, gui.lang.main_menubar.help["title"].c_str());
             ImGui::Spacing();
-            auto TextColoredCentered = [](GuiState &gui, const ImVec4 &col, const char *text_id) {
-                auto str = gui.lang.live_area.help[text_id].c_str();
-                ImGui::SetCursorPosX(ImGui::GetWindowWidth() / 2.f - (ImGui::CalcTextSize(str).x / 2.f));
-                ImGui::TextColored(col, "%s", str);
+            auto TextColoredCenteredEx = [](GuiState &gui, const ImVec4 &col, const char *text_id) {
+                TextColoredCentered(col, gui.lang.live_area.help[text_id].c_str());
                 ImGui::Spacing();
             };
-            TextColoredCentered(gui, GUI_COLOR_TEXT, "control_setting");
-            if (gui.modules.empty()) {
-                TextColoredCentered(gui, GUI_COLOR_TEXT, "firmware_not_detected");
-            }
-            if (!gui.fw_font) {
-                TextColoredCentered(gui, GUI_COLOR_TEXT, "firmware_font_not_detected");
-            }
+            TextColoredCenteredEx(gui, GUI_COLOR_TEXT, "control_setting");
+            if (gui.modules.empty())
+                TextColoredCenteredEx(gui, GUI_COLOR_TEXT, "firmware_not_detected");
+            if (!gui.fw_font)
+                TextColoredCenteredEx(gui, GUI_COLOR_TEXT, "firmware_font_not_detected");
             ImGui::Separator();
             ImGui::Spacing();
             ImGui::TextColored(GUI_COLOR_TEXT_TITLE, "%s", lang["live_area_help"].c_str());
@@ -1182,14 +1188,14 @@ void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
                     ImGui::EndTable();
                 }
             };
-            const std::array<const char *, 4> help_items_01{ "browse_app", "start_app", "show_hide", "exit_livearea" };
+            constexpr std::array<const char *, 4> help_items_01{ "browse_app", "start_app", "show_hide", "exit_livearea" };
             draw_help_table(gui, help_items_01.data(), help_items_01.size());
             ImGui::Spacing();
             ImGui::Separator();
             ImGui::Spacing();
             ImGui::TextColored(GUI_COLOR_TEXT_TITLE, "%s", lang["manual_help"].c_str());
             ImGui::Spacing();
-            const std::array<const char *, 3> help_items_02{ "browse_page", "hide_show", "exit_manual" };
+            constexpr std::array<const char *, 3> help_items_02{ "browse_page", "hide_show", "exit_manual" };
             draw_help_table(gui, help_items_02.data(), help_items_02.size());
 
             ImGui::Spacing();
@@ -1204,13 +1210,13 @@ void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
 
     const auto SELECTABLE_SIZE = ImVec2(50.f * SCALE.x, 60.f * SCALE.y);
 
-    const auto ARROW_HEIGHT_POS = VIEWPORT_SIZE.y - (250.f * SCALE.y);
-    const auto ARROW_HEIGHT_DRAW_POS = VIEWPORT_POS.y + ARROW_HEIGHT_POS;
+    const auto ARROW_HEIGHT_POS = WINDOW_SIZE.y - (250.f * SCALE.y);
+    const auto ARROW_HEIGHT_DRAW_POS = WINDOW_POS.y + ARROW_HEIGHT_POS;
     const auto ARROW_WIDTH_POS = (30.f * SCALE.x);
     const auto ARROW_SELECT_HEIGHT_POS = ARROW_HEIGHT_POS - (SELECTABLE_SIZE.y / 2.f);
 
     // Draw left arrow
-    const auto ARROW_LEFT_CENTER = ImVec2(VIEWPORT_POS.x + ARROW_WIDTH_POS, ARROW_HEIGHT_DRAW_POS);
+    const auto ARROW_LEFT_CENTER = ImVec2(WINDOW_POS.x + ARROW_WIDTH_POS, ARROW_HEIGHT_DRAW_POS);
     window_draw_list->AddTriangleFilled(
         ImVec2(ARROW_LEFT_CENTER.x + (16.f * SCALE.x), ARROW_LEFT_CENTER.y - (20.f * SCALE.y)),
         ImVec2(ARROW_LEFT_CENTER.x - (16.f * SCALE.x), ARROW_LEFT_CENTER.y),
@@ -1226,12 +1232,12 @@ void draw_live_area_screen(GuiState &gui, EmuEnvState &emuenv) {
 
     // Draw right arrow
     if (gui.live_area_app_current_open < gui.live_area_current_open_apps_list.size() - 1) {
-        const auto ARROW_RIGHT_CENTER = ImVec2(VIEWPORT_POS.x + VIEWPORT_SIZE.x - ARROW_WIDTH_POS, ARROW_HEIGHT_DRAW_POS);
+        const auto ARROW_RIGHT_CENTER = ImVec2(WINDOW_POS.x + WINDOW_SIZE.x - ARROW_WIDTH_POS, ARROW_HEIGHT_DRAW_POS);
         window_draw_list->AddTriangleFilled(
             ImVec2(ARROW_RIGHT_CENTER.x - (16.f * SCALE.x), ARROW_RIGHT_CENTER.y - (20.f * SCALE.y)),
             ImVec2(ARROW_RIGHT_CENTER.x + (16.f * SCALE.x), ARROW_RIGHT_CENTER.y),
             ImVec2(ARROW_RIGHT_CENTER.x - (16.f * SCALE.x), ARROW_RIGHT_CENTER.y + (20.f * SCALE.y)), ARROW_COLOR);
-        ImGui::SetCursorPos(ImVec2(VIEWPORT_SIZE.x - ARROW_WIDTH_POS - (SELECTABLE_SIZE.x / 2.f), ARROW_SELECT_HEIGHT_POS));
+        ImGui::SetCursorPos(ImVec2(WINDOW_SIZE.x - ARROW_WIDTH_POS - (SELECTABLE_SIZE.x / 2.f), ARROW_SELECT_HEIGHT_POS));
         if (ImGui::Selectable("##right", false, ImGuiSelectableFlags_None, SELECTABLE_SIZE))
             ++gui.live_area_app_current_open;
     }

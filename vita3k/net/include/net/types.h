@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -178,7 +178,7 @@ enum SceNetKernelErrorCode {
     SCE_NET_ERESUME = 162
 };
 
-enum SceNetErrorCode {
+enum SceNetErrorCode : uint32_t {
     SCE_NET_ERROR_EPERM = 0x80410101,
     SCE_NET_ERROR_ENOENT = 0x80410102,
     SCE_NET_ERROR_ESRCH = 0x80410103,

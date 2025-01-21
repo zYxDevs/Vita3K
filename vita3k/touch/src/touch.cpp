@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -27,8 +27,6 @@
 
 #include <cstring>
 
-constexpr int MAX_TOUCH_BUFFER_SAVED = 64;
-
 static SceTouchData touch_buffers[MAX_TOUCH_BUFFER_SAVED][2];
 static int touch_buffer_idx = 0;
 static bool is_touchpad = false;
@@ -52,8 +50,8 @@ static SceTouchData recover_touch_events(const EmuEnvState &emuenv) {
         touch_data.report[i].id = static_cast<uint8_t>(finger_buffer[i].touchId);
         touch_data.report[i].force = forceTouchEnabled[touchscreen_port] ? 128 : 0;
 
-        float x = (finger_buffer[i].x * emuenv.drawable_size.x - emuenv.viewport_pos.x) / emuenv.viewport_size.x;
-        float y = (finger_buffer[i].y * emuenv.drawable_size.y - emuenv.viewport_pos.y) / emuenv.viewport_size.y;
+        float x = (finger_buffer[i].x * emuenv.drawable_size.x - emuenv.drawable_viewport_pos.x) / emuenv.drawable_viewport_size.x;
+        float y = (finger_buffer[i].y * emuenv.drawable_size.y - emuenv.drawable_viewport_pos.y) / emuenv.drawable_viewport_size.y;
         touch_data.report[i].x = static_cast<uint16_t>(x * 1920);
 
         if (touchscreen_port == SCE_TOUCH_PORT_FRONT) {
@@ -140,8 +138,8 @@ void touch_vsync_update(const EmuEnvState &emuenv) {
                 };
 
                 const SceFVector2 touch_pos_viewport = {
-                    (touch_pos_drawable.x - emuenv.viewport_pos.x) / emuenv.viewport_size.x,
-                    (touch_pos_drawable.y - emuenv.viewport_pos.y) / emuenv.viewport_size.y
+                    (touch_pos_drawable.x - emuenv.drawable_viewport_pos.x) / emuenv.drawable_viewport_size.x,
+                    (touch_pos_drawable.y - emuenv.drawable_viewport_pos.y) / emuenv.drawable_viewport_size.y
                 };
 
                 if ((touch_pos_viewport.x >= 0) && (touch_pos_viewport.y >= 0) && (touch_pos_viewport.x < 1) && (touch_pos_viewport.y < 1)) {
@@ -282,16 +280,15 @@ int touch_get(const SceUID thread_id, EmuEnvState &emuenv, const SceUInt32 &port
         else
             nb_returned_data = 0;
     } else {
-        uint64_t vblank_count = emuenv.display.vblank_count;
-        if (vblank_count <= last_vcount[port_idx]) {
+        if (emuenv.display.vblank_count <= last_vcount[port_idx]) {
             // sceTouchRead is blocking, wait for the next vsync for the buffer to be updated
             auto thread = emuenv.kernel.get_thread(thread_id);
 
             wait_vblank(emuenv.display, emuenv.kernel, thread, last_vcount[port_idx] + 1, false);
-            vblank_count = emuenv.display.vblank_count;
         }
-        nb_returned_data = std::min<int>(count, emuenv.display.vblank_count - last_vcount[port_idx]);
-        last_vcount[port_idx] = emuenv.display.vblank_count;
+        uint64_t vblank_count = emuenv.display.vblank_count.load();
+        nb_returned_data = std::min<int>(count, vblank_count - last_vcount[port_idx]);
+        last_vcount[port_idx] = vblank_count;
     }
 
     int corr_buffer_idx;

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -24,8 +24,6 @@
 #include <map>
 #include <mutex>
 
-struct SDL_Thread;
-
 struct SceGxmInitializeParams {
     uint32_t flags = 0;
     uint32_t displayQueueMaxPendingCount = 0;
@@ -38,6 +36,7 @@ struct DisplayCallback {
     Address data;
     Ptr<SceGxmSyncObject> old_sync;
     Ptr<SceGxmSyncObject> new_sync;
+    uint32_t old_sync_timestamp;
     uint32_t new_sync_timestamp;
     bool frame_predicted;
 };
@@ -50,10 +49,17 @@ struct MemoryMapInfo {
 
 struct GxmState {
     SceGxmInitializeParams params;
+
     Queue<DisplayCallback> display_queue;
-    Ptr<SceGxmSyncObject> last_fbo_sync_object;
-    Ptr<uint32_t> notification_region;
     SceUID display_queue_thread;
+
+    // global timestamp used by sync objects
+    std::atomic<uint32_t> global_timestamp{ 1 };
+    // last display operation, as given by the global timestamp
+    uint32_t last_display_global = 0;
+
+    Ptr<uint32_t> notification_region;
+
     std::map<Address, MemoryMapInfo> memory_mapped_regions;
     std::mutex callback_lock;
 };

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,11 +20,9 @@
 #include <shader/usse_types.h>
 
 #include <map>
-#include <unordered_map>
 #include <vector>
 
 namespace spv {
-class Builder;
 typedef unsigned int Id;
 } // namespace spv
 
@@ -91,7 +89,7 @@ struct SpirvShaderParameters {
     int viewport_ratio_id;
     int viewport_offset_id;
 
-    // when using a thread, texture or litteral buffer, if not -1, this fields contain the sa register
+    // when using a thread, texture or literal buffer, if not -1, this fields contain the sa register
     // with the matching address, this assumes of course that this address is not copied somewhere
     // else and that this register is not overwritten
     // the base field is the offset to be applied when reading this buffer (almost always -4)
@@ -106,6 +104,9 @@ struct SpirvShaderParameters {
     spv::Id thread_buffer;
 
     spv::Id render_info_id;
+
+    // When using shader interlock, specialization constant telling us if the texture is gamma corrected
+    spv::Id is_srgb_constant;
 };
 
 using Coord = std::pair<spv::Id, int>;

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@
  * for a comma-separated list of file extensions to filter (ex. `"txt,md"`).
  */
 
-#include <host/dialog/filesystem.hpp>
+#include <host/dialog/filesystem.h>
 
 #include <nfd.hpp>
 
@@ -42,7 +42,7 @@
  * @param file_extensions_list File extensions list
  * @return std::string A string containing the properly formatted file extension list
  */
-std::string format_file_filter_extension_list(std::vector<std::string> &file_extensions_list) {
+std::string format_file_filter_extension_list(const std::vector<std::string> &file_extensions_list) {
     // Formatted string containing the properly formatted file extension list
     //
     // In the case of nativefiledialog, the expected file extension is a single
@@ -62,12 +62,10 @@ std::string format_file_filter_extension_list(std::vector<std::string> &file_ext
     }
 
     return formatted_string;
-};
+}
 
-namespace host {
-namespace dialog {
-namespace filesystem {
-Result open_file(std::filesystem::path &resulting_path, std::vector<FileFilter> file_filters, std::filesystem::path default_path) {
+namespace host::dialog::filesystem {
+Result open_file(std::filesystem::path &resulting_path, const std::vector<FileFilter> &file_filters, const std::filesystem::path &default_path) {
     // Initialize NFD
     NFD::Guard nfd_guard;
 
@@ -108,7 +106,7 @@ Result open_file(std::filesystem::path &resulting_path, std::vector<FileFilter> 
     file_extensions_converted.reserve(file_filters.size());
 
     // For every file filter in file_filters vector
-    for (FileFilter &file_filter : file_filters) {
+    for (const FileFilter &file_filter : file_filters) {
         // Format file extension list and store the result
         file_extensions_converted.push_back(format_file_filter_extension_list(file_filter.file_extensions));
 
@@ -116,12 +114,12 @@ Result open_file(std::filesystem::path &resulting_path, std::vector<FileFilter> 
         // File filter names can be used as they are, but the pointers of the
         // file extension lists have to point to the formatted strings
         file_filters_converted.push_back({ file_filter.display_name.c_str(), file_extensions_converted.at(file_extensions_converted.size() - 1).c_str() });
-    };
+    }
 
     /* --- Then nativefiledialog can be called --- */
 
     // If the list of file filters isn't empty, specify the pointer to the filter list array
-    if (file_filters.size() > 0) {
+    if (!file_filters.empty()) {
         arguments.filterList = file_filters_converted.data();
     }
 
@@ -153,9 +151,9 @@ Result open_file(std::filesystem::path &resulting_path, std::vector<FileFilter> 
     default:
         return Result::ERROR;
     }
-};
+}
 
-Result pick_folder(std::filesystem::path &resulting_path, std::filesystem::path default_path) {
+Result pick_folder(std::filesystem::path &resulting_path, const std::filesystem::path &default_path) {
     // Initialize NFD
     NFD::Guard nfd_guard;
 
@@ -196,7 +194,7 @@ Result pick_folder(std::filesystem::path &resulting_path, std::filesystem::path 
     default:
         return Result::ERROR;
     }
-};
+}
 
 std::string get_error() {
     std::string error = "";
@@ -205,8 +203,6 @@ std::string get_error() {
     error.assign(NFD::GetError());
 
     return error;
-};
+}
 
-} // namespace filesystem
-} // namespace dialog
-} // namespace host
+} // namespace host::dialog::filesystem

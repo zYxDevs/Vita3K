@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,19 +18,18 @@
 #pragma once
 
 #include <regmgr/state.h>
-#include <regmgr/types.h>
 
 #include <string>
 
 namespace regmgr {
 
-void init_regmgr(RegMgrState &regmgr, const std::wstring &pref_path);
+void init_regmgr(RegMgrState &regmgr, const fs::path &pref_path);
 
 // Getters and setters for binary values
 void get_bin_value(RegMgrState &regmgr, const std::string &category, const std::string &name, void *buf, uint32_t bufSize);
 void set_bin_value(RegMgrState &regmgr, const std::string &category, const std::string &name, const void *buf, uint32_t bufSize);
 
-// Geters and setters for int values
+// Getters and setters for int values
 int32_t get_int_value(RegMgrState &regmgr, const std::string &category, const std::string &name);
 void set_int_value(RegMgrState &regmgr, const std::string &category, const std::string &name, const int32_t value);
 

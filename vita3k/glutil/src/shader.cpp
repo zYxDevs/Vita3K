@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -21,11 +21,10 @@
 #include <glutil/object.h>
 
 #include <util/log.h>
-#include <util/string_utils.h>
 
 #include <fstream>
+#include <memory>
 #include <sstream>
-#include <utility>
 #include <vector>
 
 /**
@@ -34,7 +33,7 @@
  * \param fragment_file_path File path of the fragment shader
  * \return SharedGLObject that holds the resulting program id. Empty if loading was unsuccessful
  */
-UniqueGLObject gl::load_shaders(const std::string &vertex_file_path, const std::string &fragment_file_path) {
+UniqueGLObject gl::load_shaders(const fs::path &vertex_file_path, const fs::path &fragment_file_path) {
     GLuint vs = glCreateShader(GL_VERTEX_SHADER);
     GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
 

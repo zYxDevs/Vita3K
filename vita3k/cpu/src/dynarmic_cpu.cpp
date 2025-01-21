@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,16 +16,19 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 #include "cpu/common.h"
-#include <cpu/disasm/functions.h>
 #include <cpu/impl/dynarmic_cpu.h>
-#include <cpu/impl/interface.h>
 #include <cpu/state.h>
-#include <set>
+#include <util/bit_cast.h>
 #include <util/log.h>
 
 #include <mem/ptr.h>
 
 #include <dynarmic/frontend/A32/a32_ir_emitter.h>
+#include <dynarmic/interface/A32/coprocessor.h>
+
+#include <memory>
+#include <optional>
+#include <string>
 
 class ArmDynarmicCP15 : public Dynarmic::A32::Coprocessor {
     uint32_t tpidruro;
@@ -81,7 +84,7 @@ public:
         this->tpidruro = tpidruro;
     }
 
-    uint32_t get_tpidruro() {
+    uint32_t get_tpidruro() const {
         return tpidruro;
     }
 };
@@ -218,15 +221,15 @@ public:
     }
 
     bool MemoryWriteExclusive8(Dynarmic::A32::VAddr addr, uint8_t value, uint8_t expected) override {
-        return MemoryWriteExclusive(addr, value, expected); // Ptr<uint8_t>(addr).atomic_compare_and_swap(*parent->mem, value, expected);
+        return MemoryWriteExclusive(addr, value, expected);
     }
 
     bool MemoryWriteExclusive16(Dynarmic::A32::VAddr addr, uint16_t value, uint16_t expected) override {
-        return MemoryWriteExclusive(addr, value, expected); // Ptr<uint16_t>(addr).atomic_compare_and_swap(*parent->mem, value, expected);
+        return MemoryWriteExclusive(addr, value, expected);
     }
 
     bool MemoryWriteExclusive32(Dynarmic::A32::VAddr addr, uint32_t value, uint32_t expected) override {
-        return MemoryWriteExclusive(addr, value, expected); // Ptr<uint32_t>(addr).atomic_compare_and_swap(*parent->mem, value, expected);
+        return MemoryWriteExclusive(addr, value, expected);
     }
 
     bool MemoryWriteExclusive64(Dynarmic::A32::VAddr addr, uint64_t value, uint64_t expected) override {
@@ -295,14 +298,14 @@ public:
 };
 
 std::unique_ptr<Dynarmic::A32::Jit> DynarmicCPU::make_jit() {
-    Dynarmic::A32::UserConfig config;
+    Dynarmic::A32::UserConfig config{};
     config.arch_version = Dynarmic::A32::ArchVersion::v7;
     config.callbacks = cb.get();
     if (parent->mem->use_page_table) {
         config.page_table = (log_mem || !cpu_opt) ? nullptr : reinterpret_cast<decltype(config.page_table)>(parent->mem->page_table.get());
         config.absolute_offset_page_table = true;
-    } else {
-        config.fastmem_pointer = (log_mem || !cpu_opt) ? nullptr : parent->mem->memory.get();
+    } else if (!log_mem && cpu_opt) {
+        config.fastmem_pointer = std::bit_cast<uintptr_t>(parent->mem->memory.get());
     }
     config.hook_hint_instructions = true;
     config.enable_cycle_counting = false;
@@ -324,8 +327,7 @@ DynarmicCPU::DynarmicCPU(CPUState *state, std::size_t processor_id, Dynarmic::Ex
     jit = make_jit();
 }
 
-DynarmicCPU::~DynarmicCPU() {
-}
+DynarmicCPU::~DynarmicCPU() = default;
 
 int DynarmicCPU::run() {
     halted = false;
@@ -440,24 +442,21 @@ void DynarmicCPU::set_fpscr(uint32_t val) {
 
 CPUContext DynarmicCPU::save_context() {
     CPUContext ctx;
-    const auto dctx = jit->SaveContext();
-    ctx.cpu_registers = dctx.Regs();
-    static_assert(sizeof(ctx.fpu_registers) == sizeof(dctx.ExtRegs()));
-    memcpy(ctx.fpu_registers.data(), dctx.ExtRegs().data(), sizeof(ctx.fpu_registers));
-    ctx.fpscr = dctx.Fpscr();
-    ctx.cpsr = dctx.Cpsr();
+    ctx.cpu_registers = jit->Regs();
+    static_assert(sizeof(ctx.fpu_registers) == sizeof(jit->ExtRegs()));
+    memcpy(ctx.fpu_registers.data(), jit->ExtRegs().data(), sizeof(ctx.fpu_registers));
+    ctx.fpscr = jit->Fpscr();
+    ctx.cpsr = jit->Cpsr();
 
     return ctx;
 }
 
-void DynarmicCPU::load_context(CPUContext ctx) {
-    Dynarmic::A32::Context dctx;
-    dctx.Regs() = ctx.cpu_registers;
-    static_assert(sizeof(ctx.fpu_registers) == sizeof(dctx.ExtRegs()));
-    memcpy(dctx.ExtRegs().data(), ctx.fpu_registers.data(), sizeof(ctx.fpu_registers));
-    dctx.SetCpsr(ctx.cpsr);
-    dctx.SetFpscr(ctx.fpscr);
-    jit->LoadContext(dctx);
+void DynarmicCPU::load_context(const CPUContext &ctx) {
+    jit->Regs() = ctx.cpu_registers;
+    static_assert(sizeof(ctx.fpu_registers) == sizeof(jit->ExtRegs()));
+    memcpy(jit->ExtRegs().data(), ctx.fpu_registers.data(), sizeof(ctx.fpu_registers));
+    jit->SetCpsr(ctx.cpsr);
+    jit->SetFpscr(ctx.fpscr);
 }
 
 uint32_t DynarmicCPU::get_lr() {
@@ -465,11 +464,11 @@ uint32_t DynarmicCPU::get_lr() {
 }
 
 float DynarmicCPU::get_float_reg(uint8_t idx) {
-    return reinterpret_cast<float &>(jit->ExtRegs()[idx]);
+    return std::bit_cast<float>(jit->ExtRegs()[idx]);
 }
 
 void DynarmicCPU::set_float_reg(uint8_t idx, float val) {
-    jit->ExtRegs()[idx] = reinterpret_cast<uint32_t &>(val);
+    jit->ExtRegs()[idx] = std::bit_cast<uint32_t>(val);
 }
 
 bool DynarmicCPU::is_thumb_mode() {
@@ -490,11 +489,11 @@ ExclusiveMonitorPtr new_exclusive_monitor(int max_num_cores) {
 }
 
 void free_exclusive_monitor(ExclusiveMonitorPtr monitor) {
-    Dynarmic::ExclusiveMonitor *monitor_ = reinterpret_cast<Dynarmic::ExclusiveMonitor *>(monitor);
+    Dynarmic::ExclusiveMonitor *monitor_ = static_cast<Dynarmic::ExclusiveMonitor *>(monitor);
     delete monitor_;
 }
 
 void clear_exclusive(ExclusiveMonitorPtr monitor, std::size_t core_num) {
-    Dynarmic::ExclusiveMonitor *monitor_ = reinterpret_cast<Dynarmic::ExclusiveMonitor *>(monitor);
+    Dynarmic::ExclusiveMonitor *monitor_ = static_cast<Dynarmic::ExclusiveMonitor *>(monitor);
     monitor_->ClearProcessor(core_num);
 }

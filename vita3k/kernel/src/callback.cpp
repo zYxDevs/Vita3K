@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,9 +18,9 @@
 #include <kernel/callback.h>
 #include <kernel/state.h>
 #include <kernel/thread/thread_state.h>
-#include <kernel/types.h>
-#include <mutex>
 #include <util/log.h>
+
+#include <mutex>
 
 uint32_t process_callbacks(KernelState &kernel, SceUID thread_id) {
     ThreadStatePtr thread = kernel.get_thread(thread_id);
@@ -85,7 +85,7 @@ uint32_t Callback::get_num_notifications() {
     return this->num_notifications;
 }
 
-void Callback::execute(KernelState &kernel, std::function<void()> deleter) {
+void Callback::execute(KernelState &kernel, const std::function<void()> &deleter) {
     std::lock_guard lock(this->_mutex);
     if (!this->is_notified())
         return;

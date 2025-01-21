@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -31,12 +31,12 @@ static int reserve_port(CtrlState &state) {
     for (int i = 0; i < SCE_CTRL_MAX_WIRELESS_NUM; i++) {
         if (state.free_ports[i]) {
             state.free_ports[i] = false;
-            return i + 1;
+            return i;
         }
     }
 
     // No free port found.
-    return 0;
+    return -1;
 }
 
 SceCtrlExternalInputMode get_type_of_controller(const int idx) {
@@ -55,7 +55,7 @@ void refresh_controllers(CtrlState &state, EmuEnvState &emuenv) {
 
             ++controller;
         } else {
-            state.free_ports[controller->second.port - 1] = true;
+            state.free_ports[controller->second.port] = true;
             controller = state.controllers.erase(controller);
             state.controllers_num--;
         }
@@ -72,8 +72,15 @@ void refresh_controllers(CtrlState &state, EmuEnvState &emuenv) {
             if (!state.controllers.contains(guid)) {
                 Controller new_controller;
                 const GameControllerPtr controller(SDL_GameControllerOpen(joystick_index), SDL_GameControllerClose);
+                if (controller == nullptr) {
+                    continue;
+                }
                 new_controller.controller = controller;
                 new_controller.port = reserve_port(state);
+                if (new_controller.port == -1) { // Port not available
+                    return;
+                }
+                SDL_GameControllerSetPlayerIndex(controller.get(), new_controller.port);
 
                 new_controller.has_gyro = SDL_GameControllerHasSensor(controller.get(), SDL_SENSOR_GYRO);
                 if (new_controller.has_gyro)
@@ -93,9 +100,13 @@ void refresh_controllers(CtrlState &state, EmuEnvState &emuenv) {
 
                 found_gyro |= new_controller.has_gyro;
                 found_accel |= new_controller.has_accel;
+                new_controller.name = SDL_GameControllerNameForIndex(joystick_index);
+                if (new_controller.name == nullptr) {
+                    state.free_ports[new_controller.port] = true;
+                    continue;
+                }
 
                 state.controllers.emplace(guid, new_controller);
-                state.controllers_name[joystick_index] = SDL_GameControllerNameForIndex(joystick_index);
                 state.controllers_num++;
             }
         }
@@ -292,9 +303,10 @@ static void retrieve_ctrl_data(EmuEnvState &emuenv, int port, bool is_v2, bool n
     if (port == 1) {
         apply_keyboard(&buttons, axes.data(), is_v2, emuenv);
     }
-    for (const auto &controller : state.controllers) {
-        if (controller.second.port == port) {
-            apply_controller(emuenv, &buttons, axes.data(), controller.second.controller.get(), is_v2);
+    for (const auto &[_, controller] : state.controllers) {
+        if (controller.port + 1 == port) {
+            // sceCtrl ports are 1-based and SDL_GameController index is 0-based. Need to convert.
+            apply_controller(emuenv, &buttons, axes.data(), controller.controller.get(), is_v2);
         }
     }
 
@@ -318,16 +330,15 @@ int ctrl_get(const SceUID thread_id, EmuEnvState &emuenv, int port, SceCtrlData2
     if (is_peek) {
         nb_returned_data = count;
     } else {
-        uint64_t vblank_count = emuenv.display.vblank_count;
-        if (vblank_count <= state.last_vcount[port]) {
+        if (emuenv.display.vblank_count.load() <= state.last_vcount[port]) {
             // sceCtrlRead is blocking, wait for the next vsync for the buffer to be updated
             auto thread = emuenv.kernel.get_thread(thread_id);
 
             wait_vblank(emuenv.display, emuenv.kernel, thread, state.last_vcount[port] + 1, false);
-            vblank_count = emuenv.display.vblank_count;
         }
-        nb_returned_data = std::min<int>(count, emuenv.display.vblank_count - state.last_vcount[port]);
-        state.last_vcount[port] = emuenv.display.vblank_count;
+        uint64_t vblank_count = emuenv.display.vblank_count.load();
+        nb_returned_data = std::min<int32_t>(count, vblank_count - state.last_vcount[port]);
+        state.last_vcount[port] = vblank_count;
     }
 
     std::chrono::time_point<std::chrono::steady_clock> ts = std::chrono::steady_clock::now();

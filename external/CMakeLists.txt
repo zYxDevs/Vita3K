@@ -1,3 +1,5 @@
+add_compile_options(-w)
+
 include(${CMAKE_ROOT}/Modules/ExternalProject.cmake)
 
 # Make option() in all external projects do nothing when a normal variable of the
@@ -31,20 +33,14 @@ check_submodules_present()
 # Set folder for external projects (for project tree in IDE)
 set(CMAKE_FOLDER externals)
 
-# Define the Architecture variable, right now it should only contain "x86_64" or "arm64"
-include("dynarmic/CMakeModules/DetectArchitecture.cmake")
-
 option(BUILD_SHARED_LIBS "Build shared library" OFF)
 option(CAPSTONE_ARCHITECTURE_DEFAULT "Whether architectures are enabled by default" OFF)
 option(CAPSTONE_ARM_SUPPORT "ARM support" ON)
 add_subdirectory(capstone EXCLUDE_FROM_ALL)
 
-add_library(crypto-algorithms STATIC crypto-algorithms/sha256.c crypto-algorithms/sha256.h)
-target_include_directories(crypto-algorithms PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/crypto-algorithms")
-
 add_library(dirent INTERFACE)
 
-if(WIN32)
+if(MSVC)
 	target_include_directories(dirent INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/dirent/include")
 endif()
 
@@ -65,6 +61,9 @@ target_include_directories(stb INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/stb")
 
 add_library(ddspp INTERFACE)
 target_include_directories(ddspp INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/ddspp")
+
+add_library(cppcommon STATIC CppCommon/source/cpu.cpp CppCommon/source/environment.cpp)
+target_include_directories(cppcommon PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/CppCommon")
 
 add_library(glad STATIC "${CMAKE_CURRENT_SOURCE_DIR}/glad/src/gl.c")
 target_include_directories(glad PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/glad/include")
@@ -239,7 +238,17 @@ target_include_directories(CLI11 INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/cli11")
 add_library(vulkan INTERFACE)
 target_include_directories(vulkan INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/Vulkan-Headers/include")
 if(APPLE)
-	target_include_directories(vulkan INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/MoltenVK")
+	if(NOT EXISTS "${CMAKE_BINARY_DIR}/external/MoltenVK-macos.tar")
+		message(STATUS "Downloading MoltenVK...")
+		file(DOWNLOAD https://github.com/KhronosGroup/MoltenVK/releases/download/v1.2.11-artifacts/MoltenVK-macos.tar
+			"${CMAKE_BINARY_DIR}/external/MoltenVK-macos.tar" SHOW_PROGRESS)
+	endif()
+	if(NOT EXISTS "${CMAKE_BINARY_DIR}/external/MoltenVK")
+		execute_process(COMMAND tar xf "${CMAKE_BINARY_DIR}/external/MoltenVK-macos.tar" --strip-components=1 MoltenVK/MoltenVK 
+			WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external")
+	endif()
+	target_include_directories(vulkan INTERFACE "${CMAKE_BINARY_DIR}/external/MoltenVK/include")
+	set(MOLTENVK_DYLIB "${CMAKE_BINARY_DIR}/external/MoltenVK/dylib/macOS/libMoltenVK.dylib" PARENT_SCOPE)
 endif()
 
 add_library(vma INTERFACE)
@@ -249,33 +258,30 @@ target_include_directories(vma INTERFACE
 
 add_subdirectory(ffmpeg)
 
-add_subdirectory(psvpfstools)
-
-if(APPLE)
- 	execute_process(
- 		COMMAND brew --prefix openssl
- 		RESULT_VARIABLE BREW_RESULT
- 		OUTPUT_VARIABLE BREW_OPENSSL
- 		OUTPUT_STRIP_TRAILING_WHITESPACE
- 	)
- 	if(BREW_RESULT EQUAL 0)
- 		set(OPENSSL_ROOT_DIR "${BREW_OPENSSL}")
+if(APPLE OR NOT FORCE_BUILD_OPENSSL_MAC)
+	execute_process(
+		COMMAND brew --prefix openssl
+		RESULT_VARIABLE BREW_RESULT
+		OUTPUT_VARIABLE BREW_OPENSSL
+		OUTPUT_STRIP_TRAILING_WHITESPACE
+	)
+	if(BREW_RESULT EQUAL 0)
+		set(OPENSSL_ROOT_DIR "${BREW_OPENSSL}")
 		set(OPENSSL_USE_STATIC_LIBS TRUE)
- 	else()
-		message(FATAL_ERROR "Cannot locate OpenSSL directory\nPlease run: brew install openssl")
 	endif()
 endif()
 
+if(NOT FORCE_BUILD_OPENSSL_MAC)
+	find_package(OpenSSL QUIET)
+endif()
 
-
-find_package(OpenSSL QUIET)
-if(NOT OPENSSL_FOUND)
+if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
 	if(MSVC)
 		message("OpenSSL not found, using prebuilt version")
 
 		if(NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl.zip")
 			message(STATUS "Downloading openssl...")
-			file(DOWNLOAD https://firedaemon.com/download-firedaemon-openssl-3.1-zip
+			file(DOWNLOAD https://firedaemon.com/download-firedaemon-openssl-3-3-zip
 				"${CMAKE_BINARY_DIR}/external/openssl.zip" SHOW_PROGRESS)
 		endif()
 
@@ -285,9 +291,45 @@ if(NOT OPENSSL_FOUND)
 				WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl")
 		endif()
 
-		set(OPENSSL_ROOT_DIR "${CMAKE_BINARY_DIR}/external/openssl/openssl-3/x64")
-	endif()
+		set(OPENSSL_ROOT_DIR "${CMAKE_BINARY_DIR}/external/openssl/x64" CACHE STRING "Path to OpenSSL root")
+	elseif(APPLE)
+		message(STATUS "OpenSSL not found.")
+		if(NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl.tar.gz")
+			message(STATUS "Downloading OpenSSL@3 from source...")
+			file(DOWNLOAD https://github.com/openssl/openssl/releases/download/openssl-3.3.2/openssl-3.3.2.tar.gz
+				"${CMAKE_BINARY_DIR}/external/openssl.tar.gz" SHOW_PROGRESS)
+		endif()
 
+		if(NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl")
+			file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl")
+			execute_process(COMMAND tar xfp "${CMAKE_BINARY_DIR}/external/openssl.tar.gz" -C openssl --strip-components=1
+				WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external")
+		endif()
+
+		if (NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl/libssl.a" OR NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl/libcrypto.a")
+			message(STATUS "Building OpenSSL@3...")
+			if (ARCHITECTURE STREQUAL "x86_64" OR ARCHITECTURE STREQUAL "arm64")
+				execute_process(COMMAND perl Configure darwin64-${ARCHITECTURE} -mmacosx-version-min=11 WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl")
+				execute_process(COMMAND make -j${CPU_COUNT} WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl" OUTPUT_QUIET)
+			else()
+				if(NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl/arm64")
+					file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl/arm64")
+					execute_process(COMMAND perl ../Configure darwin64-arm64 -mmacosx-version-min=11 WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl/arm64")
+					execute_process(COMMAND make -j${CPU_COUNT} WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl/arm64" OUTPUT_QUIET)	
+				endif()
+				if(NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl/x86_64")
+					file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl/x86_64")
+					execute_process(COMMAND perl ../Configure darwin64-x86_64 -mmacosx-version-min=11 WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl/x86_64")
+					execute_process(COMMAND make -j${CPU_COUNT} WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl/x86_64" OUTPUT_QUIET)
+				endif()
+				execute_process(COMMAND lipo -create arm64/libssl.a x86_64/libssl.a -output libssl.a WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl")
+				execute_process(COMMAND lipo -create arm64/libcrypto.a x86_64/libcrypto.a -output libcrypto.a WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl")
+			endif()
+		endif()
+
+		set(OPENSSL_ROOT_DIR "${CMAKE_BINARY_DIR}/external/openssl")
+		set(OPENSSL_USE_STATIC_LIBS TRUE)
+	endif()
 	find_package(OpenSSL REQUIRED)
 endif()
 
@@ -296,20 +338,30 @@ message("OpenSSL libraries: ${OPENSSL_LIBRARIES}")
 
 add_library(ssl INTERFACE)
 target_link_libraries(ssl INTERFACE OpenSSL::SSL)
+add_library(crypto INTERFACE)
+target_link_libraries(crypto INTERFACE OpenSSL::Crypto)
 
+# Must be after openssl
+add_subdirectory(psvpfstools)
 
 find_package(CURL QUIET)
 if(NOT CURL_FOUND)
 	message("System curl not found, compiling curl from source")
 	include(FetchContent)
+	option(BUILD_CURL_EXE "Set to ON to build curl executable." OFF)
+	option(CURL_DISABLE_INSTALL "Set to ON to disable installation targets" ON)
 	option(HTTP_ONLY "disables all protocols except HTTP (This overrides all CURL_DISABLE_* options)" ON)
+	option(BUILD_LIBCURL_DOCS "to build libcurl man pages" OFF)
+	option(BUILD_MISC_DOCS "to build misc man pages (e.g. curl-config and mk-ca-bundle)" OFF)
+	option(ENABLE_CURL_MANUAL "to build the man page for curl and enable its -M/--manual option" OFF)
 	if(WIN32)
 		option(CURL_USE_SCHANNEL "Enable Windows native SSL/TLS" ON)
 	endif()
 	option(CURL_CA_FALLBACK "Set ON to use built-in CA store of TLS backend. Defaults to OFF" ON)
+	set(CURL_DISABLE_TESTS ON)
 	FetchContent_Declare(curl
 		GIT_REPOSITORY https://github.com/curl/curl.git
-		GIT_TAG        7ab9d43720bc34d9aa351c7ca683c1668ebf8335 # release 8.1.2
+		GIT_TAG        fd567d4f06857f4fc8e2f64ea727b1318f76ad33 # release 8.8.0
 	)
 	FetchContent_MakeAvailable(curl)
 else()
@@ -329,7 +381,9 @@ target_include_directories(libatrac9 PUBLIC LibAtrac9/C/src)
 option(BUILD_SHARED_LIBS "Build shared library" OFF)
 option(XXHASH_BUILD_XXHSUM "Build the xxhsum binary" OFF)
 option(XXH_X86DISPATCH_ALLOW_AVX "Allow building XXH3 with AVX even if it crashes on SSE2-Only CPUs" OFF)
-set(DISPATCH 1)
+if(NOT APPLE)
+	set(DISPATCH 1)
+endif()
 add_subdirectory(xxHash/cmake_unofficial EXCLUDE_FROM_ALL)
 if(XXH_X86DISPATCH_ALLOW_AVX)
 	target_compile_definitions(xxhash PRIVATE XXH_X86DISPATCH_ALLOW_AVX)
@@ -344,6 +398,9 @@ option(TRACY_NO_FRAME_IMAGE, ON)
 add_library(tracy STATIC tracy/public/TracyClient.cpp)
 target_include_directories(tracy SYSTEM PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tracy/public>)
 target_link_libraries(tracy PUBLIC ${CMAKE_DL_LIBS})
+if(WIN32)
+	target_link_libraries(tracy PRIVATE Dbghelp)
+endif()
 
 if(UNIX)
 	target_link_libraries(tracy PUBLIC pthread)

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -89,7 +89,7 @@ constexpr std::enable_if_t<sizeof...(Args) == 0> add_args_to_layout(ArgLayout &h
 // One or more arguments to add.
 template <typename Head, typename... Tail>
 constexpr void add_args_to_layout(ArgLayout &head, LayoutArgsState &state) {
-    // Returns immediately if the Head is an varargs
+    // Returns immediately if the Head is a varargs
     if constexpr (std::is_same_v<Head, module::vargs>) {
         return;
     } else {
@@ -99,7 +99,7 @@ constexpr void add_args_to_layout(ArgLayout &head, LayoutArgsState &state) {
         state = std::get<1>(result);
 
         // Recursively add the remaining arguments.
-        // If the last argument is varargs, abadon adding
+        // If the last argument is varargs, abandon adding
         if (sizeof...(Tail) > 0) {
             add_args_to_layout<Tail...>(*(&head + 1), state);
         }

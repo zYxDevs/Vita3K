@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@
 
 #include <display/functions.h>
 #include <display/state.h>
+#include <io/state.h>
 #include <kernel/state.h>
 #include <packages/functions.h>
 #include <renderer/state.h>
@@ -30,6 +31,11 @@ TRACY_MODULE_NAME(SceDisplay);
 
 static int display_wait(EmuEnvState &emuenv, SceUID thread_id, int vcount, const bool is_since_setbuf, const bool is_cb) {
     const auto &thread = emuenv.kernel.get_thread(thread_id);
+
+    if (emuenv.display.fps_hack)
+        // a game can use a vcount of 2 to render as 30fps
+        // thus doing this can allow some games to run at 60fps
+        vcount = 1;
 
     uint64_t target_vcount;
     if (is_since_setbuf) {
@@ -78,9 +84,33 @@ EXPORT(int, _sceDisplayGetFrameBufInternal) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, _sceDisplayGetMaximumFrameBufResolution) {
-    TRACY_FUNC(_sceDisplayGetMaximumFrameBufResolution);
-    return UNIMPLEMENTED();
+EXPORT(SceInt32, _sceDisplayGetMaximumFrameBufResolution, SceInt32 *width, SceInt32 *height) {
+    TRACY_FUNC(_sceDisplayGetMaximumFrameBufResolution, width, height);
+    if (!width || !height)
+        return 0;
+    if (emuenv.cfg.pstv_mode) {
+        *width = 1920;
+        *height = 1088;
+    } else {
+        // PSVita does this exact same check
+        auto &title_id = emuenv.io.title_id;
+        bool cond = (title_id == "PCSG80001")
+            || (title_id == "PCSG80007")
+            || (title_id == "PCSG00318")
+            || (title_id == "PCSG00319")
+            || (title_id == "PCSG00320")
+            || (title_id == "PCSG00321")
+            || (title_id == "PCSH00059");
+        if (cond) {
+            *width = 960;
+            *height = 544;
+
+        } else {
+            *width = 1280;
+            *height = 725;
+        }
+    }
+    return 0;
 }
 
 EXPORT(int, _sceDisplayGetResolutionInfoInternal) {

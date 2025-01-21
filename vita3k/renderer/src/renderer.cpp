@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,8 +20,6 @@
 #include <renderer/types.h>
 
 #include <gxm/functions.h>
-
-#include <cstring>
 
 namespace renderer {
 void set_depth_bias(State &state, Context *ctx, bool is_front, int factor, int units) {
