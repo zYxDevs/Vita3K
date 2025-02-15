@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -24,9 +24,6 @@
 #include <shader/usse_utilities.h>
 
 #include <SPIRV/SpvBuilder.h>
-
-#include <array>
-#include <map>
 
 struct FeatureState;
 
@@ -758,6 +755,12 @@ public:
         Imm8 src0_inc,
         Imm8 src1_inc,
         Imm8 src2_inc);
+
+    bool smbo(Imm1 nosched,
+        Imm12 dest_offset,
+        Imm12 src0_offset,
+        Imm12 src1_offset,
+        Imm12 src2_offset);
 
     bool kill(ShortPredicate pred);
 

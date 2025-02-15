@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,15 +20,17 @@
 #include <config/functions.h>
 #include <config/state.h>
 #include <ctrl/state.h>
+#include <dialog/state.h>
 #include <emuenv/state.h>
 #include <gui/functions.h>
 
 #include <SDL_events.h>
+#include <SDL_version.h>
 
 namespace gui {
 
-bool rebinds_is_open = false;
-bool is_capturing_buttons = false;
+static bool rebinds_is_open = false;
+static bool is_capturing_buttons = false;
 
 void reset_controller_binding(EmuEnvState &emuenv) {
     emuenv.cfg.controller_binds = {
@@ -117,9 +119,11 @@ static void add_bind_to_table(GuiState &gui, EmuEnvState &emuenv, const SDL_Game
             }
             break;
         case SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_PRO:
+#if SDL_VERSION_ATLEAST(2, 24, 0)
         case SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_JOYCON_LEFT:
         case SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT:
         case SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_JOYCON_PAIR:
+#endif
             switch (btn) {
             case SDL_CONTROLLER_BUTTON_BACK: return "-";
             case SDL_CONTROLLER_BUTTON_START: return "+";
@@ -146,7 +150,7 @@ static void add_bind_to_table(GuiState &gui, EmuEnvState &emuenv, const SDL_Game
     ImGui::TableSetColumnIndex(0);
     ImGui::Text("%s", buttons_name[btn].c_str());
     ImGui::TableSetColumnIndex(1);
-    if (ImGui::Button(get_mapped_button_name(SDL_GameControllerButton(emuenv.cfg.controller_binds[btn])).c_str())) {
+    if (ImGui::Button(get_mapped_button_name(static_cast<SDL_GameControllerButton>(emuenv.cfg.controller_binds[btn])).c_str())) {
         is_capturing_buttons = true;
         while (is_capturing_buttons) {
             // query SDL for button events
@@ -169,42 +173,96 @@ static void add_bind_to_table(GuiState &gui, EmuEnvState &emuenv, const SDL_Game
     ImGui::PopID();
 }
 
+static void swap_controller_ports(CtrlState &state, int source_port, int dest_port) {
+    // Check if the ports are valid
+    if ((source_port < 0) || (source_port >= SCE_CTRL_MAX_WIRELESS_NUM) || (dest_port < 0) || (dest_port >= SCE_CTRL_MAX_WIRELESS_NUM)) {
+        LOG_ERROR("Ports are not valid.");
+        return;
+    }
+
+    // Find the controllers corresponding to the source and destination ports
+    auto source_controller_it = std::find_if(state.controllers.begin(), state.controllers.end(),
+        [&](const auto &pair) { return pair.second.port == source_port; });
+    auto dest_controller_it = std::find_if(state.controllers.begin(), state.controllers.end(),
+        [&](const auto &pair) { return pair.second.port == dest_port; });
+
+    // Check that source controllers exist
+    if (source_controller_it == state.controllers.end()) {
+        LOG_ERROR("Unable to find controller on source port {}", source_port);
+        return;
+    }
+
+    if (dest_controller_it == state.controllers.end()) {
+        LOG_INFO("Controller on source port {} {} assigned to destination port {}", source_port, source_controller_it->second.name, dest_port);
+
+        // Assign controller to destination port
+        SDL_GameControllerSetPlayerIndex(source_controller_it->second.controller.get(), dest_port);
+        source_controller_it->second.port = dest_port;
+        std::swap(state.free_ports[source_port], state.free_ports[dest_port]);
+    } else {
+        LOG_INFO("Controller on source port {} {} swapped with controller on destination port {} {}", source_port, source_controller_it->second.name, dest_port, dest_controller_it->second.name);
+
+        // Swap controllers port and player index
+        SDL_GameControllerSetPlayerIndex(source_controller_it->second.controller.get(), dest_port);
+        SDL_GameControllerSetPlayerIndex(dest_controller_it->second.controller.get(), source_port);
+        std::swap(source_controller_it->second.port, dest_controller_it->second.port);
+    }
+}
+
 void draw_controllers_dialog(GuiState &gui, EmuEnvState &emuenv) {
-    const ImVec2 VIEWPORT_POS(emuenv.viewport_pos.x, emuenv.viewport_pos.y);
-    const ImVec2 VIEWPORT_SIZE(emuenv.viewport_size.x, emuenv.viewport_size.y);
-    const ImVec2 RES_SCALE(VIEWPORT_SIZE.x / emuenv.res_width_dpi_scale, VIEWPORT_SIZE.y / emuenv.res_height_dpi_scale);
+    const ImVec2 VIEWPORT_POS(emuenv.logical_viewport_pos.x, emuenv.logical_viewport_pos.y);
+    const ImVec2 VIEWPORT_SIZE(emuenv.logical_viewport_size.x, emuenv.logical_viewport_size.y);
+    const ImVec2 RES_SCALE(emuenv.gui_scale.x, emuenv.gui_scale.y);
+    static const auto BUTTON_SIZE = ImVec2(120.f * emuenv.manual_dpi_scale, 0.f);
 
     auto &ctrl = emuenv.ctrl;
     auto &lang = gui.lang.controllers;
+    auto &common = emuenv.common_dialog.lang.common;
 
     const auto has_controllers = ctrl.controllers_num > 0;
 
-    if (has_controllers)
-        ImGui::SetNextWindowSize(ImVec2(VIEWPORT_SIZE.x / 2.5f, 0), ImGuiCond_Always);
     ImGui::SetNextWindowPos(ImVec2(VIEWPORT_POS.x + (VIEWPORT_SIZE.x / 2.f), VIEWPORT_POS.y + (VIEWPORT_SIZE.y / 2.f)), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::Begin(lang["title"].c_str(), &gui.controls_menu.controllers_dialog, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings);
+    ImGui::Begin("##controllers", &gui.controls_menu.controllers_dialog, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings);
     ImGui::SetWindowFontScale(RES_SCALE.x);
+    TextColoredCentered(GUI_COLOR_TEXT_TITLE, lang["title"].c_str());
+    ImGui::Spacing();
+    ImGui::Separator();
+
     if (has_controllers) {
-        const auto connected_str = fmt::format(fmt::runtime(lang["connected"].c_str()), ctrl.controllers_num);
+        const auto connected_str = fmt::format(fmt::runtime(lang["connected"]), ctrl.controllers_num);
         ImGui::TextColored(GUI_COLOR_TEXT_MENUBAR, "%s", connected_str.c_str());
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
-        if (ImGui::BeginTable("main", 2, ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_BordersInnerV)) {
+        if (ImGui::BeginTable("main", 3, ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_BordersInnerV)) {
             ImGui::TableSetupColumn("num");
             ImGui::TableSetupColumn("name");
+            ImGui::TableSetupColumn("motion");
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::TextColored(GUI_COLOR_TEXT_TITLE, "%s", lang["num"].c_str());
             ImGui::TableSetColumnIndex(1);
             ImGui::TextColored(GUI_COLOR_TEXT_TITLE, "%s", lang["name"].c_str());
             ImGui::Spacing();
-            for (auto i = 0; i < ctrl.controllers_num; i++) {
+            ImGui::TableSetColumnIndex(2);
+            ImGui::TextColored(GUI_COLOR_TEXT_TITLE, "%s", "Motion Support");
+            const char *port_names[] = { "1", "2", "3", "4" };
+            for (auto i = 0; i < SCE_CTRL_MAX_WIRELESS_NUM; i++) {
+                auto controller_it = std::find_if(ctrl.controllers.begin(), ctrl.controllers.end(),
+                    [&](const auto &pair) { return pair.second.port == i; });
+                if (controller_it == ctrl.controllers.end()) {
+                    continue;
+                }
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::Text("%-8d", i);
+                int selected_port = i;
+                ImGui::PushID(i);
+                ImGui::SetNextItemWidth(50.f * emuenv.manual_dpi_scale);
+                if (ImGui::Combo("##swap_port", &selected_port, port_names, SCE_CTRL_MAX_WIRELESS_NUM))
+                    swap_controller_ports(ctrl, i, selected_port);
+                ImGui::PopID();
                 ImGui::TableSetColumnIndex(1);
-                if (ImGui::Button(ctrl.controllers_name[i]))
+                if (ImGui::Button(controller_it->second.name))
                     rebinds_is_open = true;
                 if (rebinds_is_open) {
                     const SDL_JoystickGUID guid = SDL_JoystickGetDeviceGUID(i);
@@ -214,11 +272,16 @@ void draw_controllers_dialog(GuiState &gui, EmuEnvState &emuenv) {
                     }
                     ImGui::SetNextWindowSize(ImVec2(VIEWPORT_SIZE.x / 1.4f, 0.f), ImGuiCond_Always);
                     ImGui::SetNextWindowPos(ImVec2(VIEWPORT_POS.x + (VIEWPORT_SIZE.x / 2.f), VIEWPORT_POS.y + (VIEWPORT_SIZE.y / 2.f)), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-                    ImGui::Begin(lang["rebind_controls"].c_str(), &rebinds_is_open, ImGuiWindowFlags_NoSavedSettings);
+                    ImGui::Begin("##rebind_controls", &rebinds_is_open, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings);
                     ImGui::SetWindowFontScale(RES_SCALE.x);
+                    TextColoredCentered(GUI_COLOR_TEXT_TITLE, lang["rebind_controls"].c_str());
+                    ImGui::Spacing();
+                    ImGui::Separator();
+
                     auto &controls = gui.lang.controls;
+
                     const auto type = SDL_GameControllerTypeForIndex(i);
-                    ImGui::TextColored(GUI_COLOR_TEXT_MENUBAR, "%s", ctrl.controllers_name[i]);
+                    ImGui::TextColored(GUI_COLOR_TEXT_MENUBAR, "%s", controller_it->second.name);
                     ImGui::Separator();
                     if (ImGui::BeginTable("rebindControl", 2, ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_BordersInnerV)) {
                         ImGui::TableSetupColumn("leftButtons");
@@ -298,9 +361,9 @@ void draw_controllers_dialog(GuiState &gui, EmuEnvState &emuenv) {
                             config::serialize_config(emuenv.cfg, emuenv.cfg.config_path);
                         };
                         ImGui::Spacing();
-                        const auto led_color_str = lang["led_color"].c_str();
-                        ImGui::SetCursorPosX((ImGui::GetWindowWidth() / 2.f) - (ImGui::CalcTextSize(led_color_str).x / 2.f));
-                        ImGui::TextColored(GUI_COLOR_TEXT_TITLE, "%s", led_color_str);
+                        ImGui::Separator();
+                        ImGui::Spacing();
+                        TextColoredCentered(GUI_COLOR_TEXT_TITLE, lang["led_color"].c_str());
                         auto &color = emuenv.cfg.controller_led_color;
                         bool has_custom_color = !color.empty();
                         if (ImGui::Checkbox(lang["use_custom_color"].c_str(), &has_custom_color)) {
@@ -311,8 +374,7 @@ void draw_controllers_dialog(GuiState &gui, EmuEnvState &emuenv) {
                                 color.clear();
                             set_led_color(default_color);
                         }
-                        if (ImGui::IsItemHovered())
-                            ImGui::SetTooltip("%s", lang["use_custom_color_description"].c_str());
+                        SetTooltipEx(lang["use_custom_color_description"].c_str());
                         if (has_custom_color) {
                             ImGui::Spacing();
                             if (ImGui::BeginTable("setColor", 3, ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_BordersInnerV)) {
@@ -341,8 +403,17 @@ void draw_controllers_dialog(GuiState &gui, EmuEnvState &emuenv) {
                             }
                         }
                     }
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::Spacing();
+                    ImGui::SetCursorPosX((ImGui::GetWindowSize().x / 2.f) - (BUTTON_SIZE.x / 2.f));
+                    if (ImGui::Button(common["close"].c_str(), BUTTON_SIZE))
+                        rebinds_is_open = false;
+
                     ImGui::End();
                 }
+                ImGui::TableSetColumnIndex(2);
+                ImGui::Text("%s", (controller_it->second.has_accel && controller_it->second.has_gyro) ? common["yes"].c_str() : common["no"].c_str());
             }
             ImGui::EndTable();
         }
@@ -351,14 +422,21 @@ void draw_controllers_dialog(GuiState &gui, EmuEnvState &emuenv) {
 
     if (emuenv.ctrl.has_motion_support) {
         ImGui::Spacing();
+        if (ImGui::Checkbox("Disable Motion", &emuenv.cfg.disable_motion))
+            config::serialize_config(emuenv.cfg, emuenv.cfg.config_path);
         ImGui::PushTextWrapPos(ImGui::GetWindowWidth() - (ImGui::GetStyle().WindowPadding.x * 2.f));
-        ImGui::TextColored(GUI_COLOR_TEXT_TITLE, "%s", lang["motion_support"].c_str());
         ImGui::PopTextWrapPos();
     }
 
     ImGui::Spacing();
     if (ImGui::Button(lang["reset_controller_binding"].c_str()))
         reset_controller_binding(emuenv);
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    ImGui::SetCursorPosX((ImGui::GetWindowSize().x / 2.f) - (BUTTON_SIZE.x / 2.f));
+    if (ImGui::Button(common["close"].c_str(), BUTTON_SIZE))
+        gui.controls_menu.controllers_dialog = false;
 
     ImGui::End();
 }

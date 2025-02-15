@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@
 #include <ctrl/state.h>
 #include <emuenv/state.h>
 
-struct ControllerBinding;
+#include <array>
 
 std::array<ControllerBinding, 15> get_controller_bindings_ext(EmuEnvState &emuenv);
 SceCtrlExternalInputMode get_type_of_controller(const int idx);

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,13 +17,11 @@
 
 #include <shader/usse_translator.h>
 
-#include <SPIRV/GLSL.std.450.h>
 #include <SPIRV/SpvBuilder.h>
 
 #include <shader/usse_decoder_helpers.h>
 #include <shader/usse_disasm.h>
 #include <shader/usse_types.h>
-#include <util/log.h>
 
 using namespace shader;
 using namespace usse;
@@ -144,6 +142,28 @@ bool USSETranslatorVisitor::smlsi(
     parse_increment(2, src2_inc_mode, src2_inc);
 
     LOG_DISASM("{}", disasm_str);
+
+    return true;
+}
+
+bool USSETranslatorVisitor::smbo(Imm1 nosched,
+    Imm12 dest_offset,
+    Imm12 src0_offset,
+    Imm12 src1_offset,
+    Imm12 src2_offset) {
+    LOG_DISASM("{:016x}: SMBO {}, {}, {}, {}", m_instr, dest_offset, src0_offset, src1_offset, src2_offset);
+
+    m_b.setLine(m_recompiler.cur_pc);
+
+    auto parse_offset = [&](const int idx, Imm12 offset) {
+        for (int i = 0; i < 17; i++) {
+            repeat_increase[idx][i] = i + offset;
+        }
+    };
+    parse_offset(3, dest_offset);
+    parse_offset(0, src0_offset);
+    parse_offset(1, src1_offset);
+    parse_offset(2, src2_offset);
 
     return true;
 }

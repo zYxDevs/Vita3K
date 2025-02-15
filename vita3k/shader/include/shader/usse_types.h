@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -24,12 +24,10 @@
 #include <cassert>
 #include <functional>
 #include <string>
-#include <unordered_map>
 #include <variant>
 #include <vector>
 
-namespace shader {
-namespace usse {
+namespace shader::usse {
 
 enum class Opcode {
 #define OPCODE(n) n,
@@ -99,6 +97,7 @@ inline ExtPredicate ext_vec_predicate_to_ext(ExtVecPredicate pred) {
         // TODO
         assert(false);
         LOG_CRITICAL("ExtVecPredicate::NEGP2 case hit, report this to devs.");
+        [[fallthrough]];
     default:
         return ExtPredicate::NONE;
     }
@@ -442,8 +441,7 @@ enum class ShaderPhase {
     Max,
 };
 
-} // namespace usse
-} // namespace shader
+} // namespace shader::usse
 
 namespace std {
 

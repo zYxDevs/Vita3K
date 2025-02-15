@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -2044,6 +2044,25 @@ NID(sceImeSetCaret, 0xD8342D2A)
 NID(sceImeSetPreeditGeometry, 0x7B1EFAA5)
 NID(sceImeSetText, 0xF3BD9A76)
 NID(sceImeUpdate, 0x71D6898A)
+// Library "SceIpmi" // Some nids are fake
+NID(_ZN4IPMI6Client10disconnectEv, 0xEC73331C)
+NID(_ZN4IPMI6Client11getUserDataEv, 0x004F48ED)
+NID(_ZN4IPMI6Client12tryGetResultEjPiPvPmm, 0xF8C2B8BA)
+NID(_ZN4IPMI6Client12tryGetResultEjjPiPNS_10BufferInfoEj, 0x4EBB01A2)
+NID(_ZN4IPMI6Client13pollEventFlagEjjjPj, 0x8FF23C3C)
+NID(_ZN4IPMI6Client13waitEventFlagEjjjPjS1_, 0x45C32034)
+NID(_ZN4IPMI6Client16invokeSyncMethodEjPKNS_8DataInfoEjPiPNS_10BufferInfoEj, 0x73C72FBB)
+NID(_ZN4IPMI6Client16invokeSyncMethodEjPKvjPiPvPjj, 0x28BD5F19)
+NID(_ZN4IPMI6Client17invokeAsyncMethodEjPKNS_8DataInfoEjPjPKNS0_12EventNotifeeE, 0x387AFA3F)
+NID(_ZN4IPMI6Client17invokeAsyncMethodEjPKvjPiPKNS0_12EventNotifeeE, 0xAFD10F3B)
+NID(_ZN4IPMI6Client19terminateConnectionEv, 0xD484D36D)
+NID(_ZN4IPMI6Client6Config24estimateClientMemorySizeEv, 0x4E255C31)
+NID(_ZN4IPMI6Client6createEPPS0_PKNS0_6ConfigEPvS6_, 0xB282B430)
+NID(_ZN4IPMI6Client6getMsgEjPvPjjS2_, 0xA3E650B0)
+NID(_ZN4IPMI6Client7connectEPKvjPi, 0xA22C3E01)
+NID(_ZN4IPMI6Client7destroyEv, 0x101C93F8)
+NID(_ZN4IPMI6Client9tryGetMsgEjPvPmm, 0x60EFADE7)
+NID(_ZN4IPMI6ClientD1Ev, 0xA5AA193C)
 // Module "SceIncomingDialog"
 // Library "SceIncomingDialog"
 NID(sceIncomingDialogClose, 0x126BD15E)
@@ -7186,6 +7205,10 @@ NID(sceUdcdGetDrvState, 0x99B3DA5D)
 NID(sceUdcdRegisterCallback, 0xA7070093)
 NID(sceUdcdUnregisterCallback, 0xC3FBA889)
 NID(sceUdcdWaitState, 0x59EFFAF1)
+// Module "SceUlobjDbg"
+// Library "SceUlobjDbg"
+NID(SceUlobjDbg_D7F0F610, 0xD7F0F610)
+NID(SceUlobjDbg_F9C0F5DA, 0xF9C0F5DA)
 // Module "SceUlobjMgr"
 // Library "SceUlobjMgr"
 NID(_sceUlobjMgrRegisterLibultProtocolRevision, 0x50F2F2AA)

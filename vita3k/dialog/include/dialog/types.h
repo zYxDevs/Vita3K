@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -111,7 +111,7 @@ enum SceCommonDialogResult {
     SCE_COMMON_DIALOG_RESULT_ABORTED
 };
 
-enum SceCommonDialogErrorCode {
+enum SceCommonDialogErrorCode : uint32_t {
     SCE_COMMON_DIALOG_ERROR_BUSY = 0x80020401,
     SCE_COMMON_DIALOG_ERROR_NULL = 0x80020402,
     SCE_COMMON_DIALOG_ERROR_INVALID_ARGUMENT = 0x80020403,

@@ -1,5 +1,5 @@
 ﻿// Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,9 +20,9 @@
 #include <gui/functions.h>
 
 #include <config/state.h>
+#include <dialog/state.h>
 #include <display/state.h>
 #include <io/state.h>
-#include <packages/functions.h>
 #include <packages/sfo.h>
 #include <util/safe_time.h>
 #include <util/string_utils.h>
@@ -32,19 +32,10 @@
 
 #include <pugixml.hpp>
 
+#include <SDL_power.h>
 #include <stb_image.h>
 
 namespace gui {
-
-struct NoticeInfo {
-    std::string id;
-    std::string content_id;
-    std::string group;
-    std::string type;
-    time_t time;
-    std::string name;
-    std::string msg;
-};
 
 struct NoticeList {
     std::string id;
@@ -52,14 +43,51 @@ struct NoticeList {
     std::string group;
     std::string type;
     time_t time;
+    bool is_new;
+};
+
+struct NoticeInfo : NoticeList {
+    std::string name;
+    std::string msg;
 };
 
 static std::map<std::string, std::vector<NoticeList>> notice_list;
 static std::map<std::string, int> notice_list_count_new;
-static std::map<std::string, std::map<time_t, bool>> notice_list_new;
-static std::map<time_t, bool> notice_info_new;
 static int notice_info_count_new = 0;
 static std::vector<NoticeInfo> notice_info;
+
+void erase_app_notice(GuiState &gui, const std::string &title_id) {
+    auto &notice_global = notice_list["global"];
+
+    // Check if the notice list is empty
+    if (notice_global.empty()) {
+        LOG_WARN("Notice list is empty.");
+        return;
+    }
+
+    auto notice_list_it = notice_global.begin();
+    while (notice_list_it != notice_global.end()) {
+        if (notice_list_it->id != title_id) {
+            ++notice_list_it;
+            continue;
+        }
+
+        // Find and erase the corresponding entry in notice_info
+        const auto notice_info_it = std::find_if(notice_info.begin(), notice_info.end(), [&](const NoticeInfo &n) {
+            return n.time == notice_list_it->time;
+        });
+        if (notice_info_it != notice_info.end())
+            notice_info.erase(notice_info_it); // Erase the entry from notice_info
+
+        // Erase the entry from notice_info_icon
+        gui.notice_info_icon.erase(notice_list_it->time);
+
+        // Erase the item from notice_general and update the iterator
+        notice_list_it = notice_global.erase(notice_list_it);
+
+        LOG_INFO("Notice content with title id: {} has been erased.", title_id);
+    }
+}
 
 static bool init_notice_icon(GuiState &gui, EmuEnvState &emuenv, const fs::path &content_path, const NoticeList &info) {
     gui.notice_info_icon[info.time] = {};
@@ -67,15 +95,15 @@ static bool init_notice_icon(GuiState &gui, EmuEnvState &emuenv, const fs::path 
     int32_t height = 0;
     vfs::FileBuffer buffer;
 
-    if (!vfs::read_file(VitaIoDevice::ux0, buffer, emuenv.pref_path.wstring(), content_path)) {
+    if (!vfs::read_file(VitaIoDevice::ux0, buffer, emuenv.pref_path, content_path)) {
         if (info.type == "trophy") {
             LOG_WARN("Icon no found for trophy id: {} on NpComId: {}", info.content_id, info.id);
             return false;
         } else {
-            if (!vfs::read_app_file(buffer, emuenv.pref_path.wstring(), info.id, "sce_sys/icon0.png")) {
+            if (!vfs::read_app_file(buffer, emuenv.pref_path, info.id, "sce_sys/icon0.png")) {
                 buffer = init_default_icon(gui, emuenv);
                 if (buffer.empty()) {
-                    LOG_WARN("Not found defaut icon for this notice content: {}", info.content_id);
+                    LOG_WARN("Not found default icon for this notice content: {}", info.content_id);
                     return false;
                 }
             }
@@ -83,7 +111,7 @@ static bool init_notice_icon(GuiState &gui, EmuEnvState &emuenv, const fs::path 
     }
     stbi_uc *data = stbi_load_from_memory(&buffer[0], static_cast<int>(buffer.size()), &width, &height, nullptr, STBI_rgb_alpha);
     if (!data) {
-        LOG_ERROR("Invalid icon for notice id: {} in path {}.", info.id, content_path.string());
+        LOG_ERROR("Invalid icon for notice id: {} in path {}.", info.id, content_path);
         return false;
     }
     gui.notice_info_icon[info.time].init(gui.imgui_state.get(), data, width, height);
@@ -96,7 +124,7 @@ static bool set_notice_info(GuiState &gui, EmuEnvState &emuenv, const NoticeList
     std::string msg, name;
     fs::path content_path;
 
-    auto lang = gui.lang.indicator;
+    auto &lang = gui.lang.indicator;
     if (info.type == "content") {
         if (info.group.find("gd") != std::string::npos) {
             content_path = fs::path("app") / info.id;
@@ -111,18 +139,18 @@ static bool set_notice_info(GuiState &gui, EmuEnvState &emuenv, const NoticeList
             msg = lang["install_complete"];
         }
         vfs::FileBuffer params;
-        if (vfs::read_file(VitaIoDevice::ux0, params, emuenv.pref_path.wstring(), content_path / "sce_sys/param.sfo")) {
+        if (vfs::read_file(VitaIoDevice::ux0, params, emuenv.pref_path, content_path / "sce_sys/param.sfo")) {
             SfoFile sfo_handle;
             sfo::load(sfo_handle, params);
             if (!sfo::get_data_by_key(name, sfo_handle, fmt::format("TITLE_{:0>2d}", emuenv.cfg.sys_lang)))
                 sfo::get_data_by_key(name, sfo_handle, "TITLE");
         } else {
-            LOG_WARN("Content not found for id: {}, in path: {}", info.content_id, content_path.string());
+            LOG_WARN("Content not found for id: {}, in path: {}", info.content_id, content_path);
             return false;
         }
         init_notice_icon(gui, emuenv, content_path / "sce_sys/icon0.png", info);
     } else {
-        auto common = gui.lang.common.main;
+        auto &common = gui.lang.common.main;
         switch (static_cast<np::trophy::SceNpTrophyGrade>(string_utils::stoi_def(info.group, 0, "trophy group"))) {
         case np::trophy::SceNpTrophyGrade::SCE_NP_TROPHY_GRADE_PLATINUM:
             name = fmt::format("({}) ", common["platinum"]);
@@ -161,33 +189,27 @@ static bool set_notice_info(GuiState &gui, EmuEnvState &emuenv, const NoticeList
             return false;
     }
 
-    notice_info.push_back({ info.id, info.content_id, info.group, info.type, info.time, name, msg });
+    notice_info.push_back({ info, name, msg });
 
     return true;
 }
 
 void init_notice_info(GuiState &gui, EmuEnvState &emuenv) {
-    if (!notice_info.empty()) {
-        notice_info.clear();
-        notice_info_count_new = 0;
-        for (auto &notice : gui.notice_info_icon)
-            notice.second = {};
-        gui.notice_info_icon.clear();
-        notice_info_new.clear();
-    }
+    notice_info.clear();
+    notice_info_count_new = 0;
+    gui.notice_info_icon.clear();
 
     if (!notice_list.empty()) {
-        for (const auto &user : notice_list) {
-            if ((user.first == "global") || (user.first == emuenv.io.user_id)) {
-                for (const auto &notice : user.second) {
-                    if (!set_notice_info(gui, emuenv, notice)) {
-                        const auto notice_index = std::find_if(notice_list[user.first].begin(), notice_list[user.first].end(), [&](const NoticeList &n) {
-                            return n.time == notice.time;
-                        });
-                        notice_list[user.first].erase(notice_index);
+        for (auto &[user, lists] : notice_list) {
+            if ((user == "global") || (user == emuenv.io.user_id)) {
+                auto notice_it = lists.begin();
+                while (notice_it != lists.end()) {
+                    if (!set_notice_info(gui, emuenv, *notice_it)) {
+                        notice_it = lists.erase(notice_it);
                         save_notice_list(emuenv);
-                    } else
-                        notice_info_new[notice.time] = notice_list_new[user.first][notice.time];
+                    } else {
+                        ++notice_it;
+                    }
                 }
             }
         }
@@ -204,7 +226,6 @@ void init_notice_info(GuiState &gui, EmuEnvState &emuenv) {
 void get_notice_list(EmuEnvState &emuenv) {
     notice_list.clear();
     notice_list_count_new.clear();
-    notice_list_new.clear();
     const auto notice_path{ emuenv.pref_path / "ux0/user/notice.xml" };
 
     if (fs::exists(notice_path)) {
@@ -223,13 +244,13 @@ void get_notice_list(EmuEnvState &emuenv) {
                         noticeList.group = notice.attribute("group").as_string();
                         noticeList.type = notice.attribute("type").as_string();
                         noticeList.time = !notice.attribute("time").empty() ? notice.attribute("time").as_llong() : (notice.attribute("date").as_llong() * 1000); // Backward Compat
-                        notice_list_new[user_id][noticeList.time] = notice.attribute("new").as_bool();
+                        noticeList.is_new = notice.attribute("new").as_bool();
                         notice_list[user_id].push_back(noticeList);
                     }
                 }
             }
         } else {
-            LOG_ERROR("Notice XML found is corrupted on path: {}", notice_path.string());
+            LOG_ERROR("Notice XML found is corrupted on path: {}", notice_path);
             fs::remove(notice_path);
         }
     }
@@ -260,7 +281,7 @@ void save_notice_list(EmuEnvState &emuenv) {
             info_child.append_attribute("group") = notice.group.c_str();
             info_child.append_attribute("type") = notice.type.c_str();
             info_child.append_attribute("time") = notice.time;
-            info_child.append_attribute("new") = notice_list_new[user.first][notice.time];
+            info_child.append_attribute("new") = notice.is_new;
         }
     }
 
@@ -278,19 +299,18 @@ void update_notice_info(GuiState &gui, EmuEnvState &emuenv, const std::string &t
         info.content_id = emuenv.app_info.app_content_id;
         info.group = emuenv.app_info.app_category;
     } else {
-        const auto trophy_data = gui.trophy_unlock_display_requests.back();
+        const auto &trophy_data = gui.trophy_unlock_display_requests.back();
         info.id = trophy_data.np_com_id;
         info.content_id = trophy_data.trophy_id;
         info.group = std::to_string(int(trophy_data.trophy_kind));
     }
     info.type = type;
     info.time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    notice_info_new[info.time] = true;
-    notice_list_new[user_id][info.time] = true;
+    info.is_new = true;
     notice_list[user_id].push_back(info);
     if (set_notice_info(gui, emuenv, info)) {
-        ++notice_info_count_new;
         ++notice_list_count_new[user_id];
+        ++notice_info_count_new;
         std::sort(notice_info.begin(), notice_info.end(), [&](const NoticeInfo &na, const NoticeInfo &nb) {
             return na.time > nb.time;
         });
@@ -301,20 +321,25 @@ void update_notice_info(GuiState &gui, EmuEnvState &emuenv, const std::string &t
 
 static void clean_notice_info_new(const std::string &user_id) {
     notice_info_count_new = 0;
-    notice_info_new.clear();
     notice_list_count_new["global"] = 0;
     notice_list_count_new[user_id] = 0;
-    notice_list_new["global"].clear();
-    notice_list_new[user_id].clear();
+    for (auto &notice : notice_info)
+        notice.is_new = false;
+    for (auto &[user, lists] : notice_list) {
+        if ((user == "global") || (user == user_id)) {
+            for (auto &list : lists)
+                list.is_new = false;
+        }
+    }
 }
 
 static std::string get_notice_time(GuiState &gui, EmuEnvState &emuenv, const time_t &time) {
     std::string date;
     const auto time_in_second = time / 1000;
     const auto diff_time = difftime(std::time(nullptr), time_in_second);
-    static const auto minute = 60;
-    static const auto hour = minute * 60;
-    static const auto day = hour * 24;
+    constexpr auto minute = 60;
+    constexpr auto hour = minute * 60;
+    constexpr auto day = hour * 24;
     if (diff_time >= day) {
         tm date_tm = {};
         SAFE_LOCALTIME(&time_in_second, &date_tm);
@@ -323,7 +348,7 @@ static std::string get_notice_time(GuiState &gui, EmuEnvState &emuenv, const tim
         if (emuenv.cfg.sys_time_format == SCE_SYSTEM_PARAM_TIME_FORMAT_12HOUR)
             date += fmt::format(" {}", DATE_TIME[DateTime::DAY_MOMENT]);
     } else {
-        auto lang = gui.lang.common.main;
+        auto &lang = gui.lang.common.main;
         if (diff_time >= (hour * 2))
             date = fmt::format(fmt::runtime(lang["hours_ago"]), uint32_t(diff_time / hour));
         else if (diff_time >= hour)
@@ -336,16 +361,18 @@ static std::string get_notice_time(GuiState &gui, EmuEnvState &emuenv, const tim
 
     return date;
 }
-static bool notice_info_state;
 
 static void draw_notice_info(GuiState &gui, EmuEnvState &emuenv) {
-    const ImVec2 VIEWPORT_POS(emuenv.viewport_pos.x, emuenv.viewport_pos.y);
-    const ImVec2 VIEWPORT_SIZE(emuenv.viewport_size.x, emuenv.viewport_size.y);
-    const ImVec2 RES_SCALE(VIEWPORT_SIZE.x / emuenv.res_width_dpi_scale, VIEWPORT_SIZE.y / emuenv.res_height_dpi_scale);
-    const ImVec2 SCALE(RES_SCALE.x * emuenv.dpi_scale, RES_SCALE.y * emuenv.dpi_scale);
+    static bool notice_info_state;
+    const ImVec2 VIEWPORT_POS(emuenv.logical_viewport_pos.x, emuenv.logical_viewport_pos.y);
+    const ImVec2 VIEWPORT_SIZE(emuenv.logical_viewport_size.x, emuenv.logical_viewport_size.y);
+    const ImVec2 RES_SCALE(emuenv.gui_scale.x, emuenv.gui_scale.y);
+    const ImVec2 SCALE(RES_SCALE.x * emuenv.manual_dpi_scale, RES_SCALE.y * emuenv.manual_dpi_scale);
+
+    const auto VIEWPORT_WIDTH_POS_MAX(VIEWPORT_POS.x + VIEWPORT_SIZE.x);
 
     const ImVec2 NOTICE_SIZE = notice_info_count_new ? ImVec2(104.0f * SCALE.x, 95.0f * SCALE.y) : ImVec2(90.0f * SCALE.x, 82.0f * SCALE.y);
-    const ImVec2 NOTICE_ICON_POS(VIEWPORT_POS.x + VIEWPORT_SIZE.x - NOTICE_SIZE.x, VIEWPORT_POS.y);
+    const ImVec2 NOTICE_ICON_POS(VIEWPORT_WIDTH_POS_MAX - NOTICE_SIZE.x, VIEWPORT_POS.y);
     const ImVec2 NOTICE_ICON_POS_MAX(NOTICE_ICON_POS.x + NOTICE_SIZE.x, NOTICE_ICON_POS.y + NOTICE_SIZE.y);
 
     const auto NOTICE_COLOR = gui.information_bar_color.notice_font;
@@ -363,20 +390,20 @@ static void draw_notice_info(GuiState &gui, EmuEnvState &emuenv) {
         if (gui.theme_information_bar_notice.contains(NoticeIcon::NEW))
             draw_list->AddImage(gui.theme_information_bar_notice[NoticeIcon::NEW], NOTICE_ICON_POS, NOTICE_ICON_POS_MAX);
         else
-            draw_list->AddCircleFilled(ImVec2(VIEWPORT_POS.x + VIEWPORT_SIZE.x - (24.f * SCALE.x), VIEWPORT_POS.y + (16.f * SCALE.y)), 60.f * SCALE.x, IM_COL32(11.f, 90.f, 252.f, 255.f));
+            draw_list->AddCircleFilled(ImVec2(VIEWPORT_WIDTH_POS_MAX - (24.f * SCALE.x), VIEWPORT_POS.y + (16.f * SCALE.y)), 60.f * SCALE.x, IM_COL32(11.f, 90.f, 252.f, 255.f));
         const auto FONT_SCALE = 40.f * SCALE.x;
         const auto NOTICE_COUNT_FONT_SCALE = FONT_SCALE / 40.f;
         const auto NOTICE_COUNT_SIZE = ImGui::CalcTextSize(std::to_string(notice_info_count_new).c_str()).x * NOTICE_COUNT_FONT_SCALE;
-        draw_list->AddText(gui.vita_font, FONT_SCALE, ImVec2(VIEWPORT_SIZE.x - (NOTICE_SIZE.x / 2.f) - (NOTICE_COUNT_SIZE / 2.f) + (12.f * SCALE.x), (15.f * SCALE.y)), NOTICE_COLOR, std::to_string(notice_info_count_new).c_str());
+        draw_list->AddText(gui.vita_font[emuenv.current_font_level], FONT_SCALE, ImVec2(VIEWPORT_WIDTH_POS_MAX - (NOTICE_SIZE.x / 2.f) - (NOTICE_COUNT_SIZE / 2.f) + (12.f * SCALE.x), VIEWPORT_POS.y + (15.f * SCALE.y)), NOTICE_COLOR, std::to_string(notice_info_count_new).c_str());
     } else {
         if (gui.theme_information_bar_notice.contains(NoticeIcon::NO))
             draw_list->AddImage(gui.theme_information_bar_notice[NoticeIcon::NO], NOTICE_ICON_POS, NOTICE_ICON_POS_MAX);
         else
-            draw_list->AddCircleFilled(ImVec2(VIEWPORT_POS.x + VIEWPORT_SIZE.x - (28.f * SCALE.x), VIEWPORT_POS.y + (18.f * SCALE.y)), 44.f * SCALE.x, IM_COL32(62.f, 98.f, 160.f, 255.f));
+            draw_list->AddCircleFilled(ImVec2(VIEWPORT_WIDTH_POS_MAX - (28.f * SCALE.x), VIEWPORT_POS.y + (18.f * SCALE.y)), 44.f * SCALE.x, IM_COL32(62.f, 98.f, 160.f, 255.f));
     }
 
     if (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootWindow) && !ImGui::IsAnyItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-        if (notice_info_state) {
+        if (notice_info_state && (notice_info_count_new > 0)) {
             clean_notice_info_new(emuenv.io.user_id);
             save_notice_list(emuenv);
         }
@@ -384,7 +411,7 @@ static void draw_notice_info(GuiState &gui, EmuEnvState &emuenv) {
     }
 
     if (notice_info_state) {
-        const auto POPUP_SIZE = notice_info.empty() ? ImVec2(412.f * SCALE.x, 86.f * SCALE.y) : ImVec2(782.f * SCALE.x, notice_info.size() < 5 ? 22.f * emuenv.dpi_scale + ((80.f * SCALE.y) * notice_info.size() + (10.f * (notice_info.size() - 1) * emuenv.dpi_scale)) : 464.f * SCALE.y);
+        const auto POPUP_SIZE = notice_info.empty() ? ImVec2(412.f * SCALE.x, 86.f * SCALE.y) : ImVec2(782.f * SCALE.x, notice_info.size() < 5 ? 22.f * emuenv.manual_dpi_scale + ((80.f * SCALE.y) * notice_info.size() + (10.f * (notice_info.size() - 1) * emuenv.manual_dpi_scale)) : 464.f * SCALE.y);
         const auto POPUP_POS = ImVec2(VIEWPORT_POS.x + (notice_info.empty() ? VIEWPORT_SIZE.x - (502.f * SCALE.y) : (VIEWPORT_SIZE.x / 2.f) - (POPUP_SIZE.x / 2.f)), VIEWPORT_POS.y + (56.f * SCALE.y));
         const auto POPUP_BG_COLOR = notice_info.empty() ? GUI_COLOR_TEXT : GUI_SMOOTH_GRAY;
 
@@ -392,9 +419,10 @@ static void draw_notice_info(GuiState &gui, EmuEnvState &emuenv) {
         ImGui::PushStyleColor(ImGuiCol_Border, GUI_COLOR_TEXT);
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.f * SCALE.x);
         ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, notice_info.empty() ? 0.f : 8.0f * SCALE.x);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
         ImGui::SetNextWindowPos(POPUP_POS, ImGuiCond_Always);
-        ImGui::BeginChild("##notice_info_child", POPUP_SIZE, true, ImGuiWindowFlags_NoSavedSettings);
-        auto lang = gui.lang.indicator;
+        ImGui::BeginChild("##notice_info_child", POPUP_SIZE, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoSavedSettings);
+        auto &lang = gui.lang.indicator;
         if (notice_info.empty()) {
             ImGui::SetWindowFontScale(1.2f * RES_SCALE.x);
             const auto no_notif = lang["no_notif"].c_str();
@@ -423,14 +451,14 @@ static void draw_notice_info(GuiState &gui, EmuEnvState &emuenv) {
                 ImGui::PushStyleColor(ImGuiCol_Header, SELECT_COLOR);
                 ImGui::PushStyleColor(ImGuiCol_HeaderHovered, SELECT_COLOR_HOVERED);
                 ImGui::PushStyleColor(ImGuiCol_HeaderActive, SELECT_COLOR_ACTIVE);
-                if (ImGui::Selectable("##icon", notice_info_new[notice.time], ImGuiSelectableFlags_SpanAllColumns, SELECT_SIZE)) {
+                if (ImGui::Selectable("##icon", notice.is_new, ImGuiSelectableFlags_SpanAllColumns, SELECT_SIZE)) {
                     clean_notice_info_new(emuenv.io.user_id);
                     save_notice_list(emuenv);
                     if (notice.type == "content") {
                         if (notice.group == "theme")
                             pre_load_app(gui, emuenv, false, "NPXS10015");
                         else
-                            pre_load_app(gui, emuenv, emuenv.cfg.show_live_area_screen, notice.id);
+                            select_app(gui, notice.id);
                     } else {
                         pre_load_app(gui, emuenv, false, "NPXS10008");
                         open_trophy_unlocked(gui, emuenv, notice.id, notice.content_id);
@@ -456,7 +484,7 @@ static void draw_notice_info(GuiState &gui, EmuEnvState &emuenv) {
         }
         ImGui::EndChild();
         ImGui::PopStyleColor(2);
-        ImGui::PopStyleVar(2);
+        ImGui::PopStyleVar(3);
 
         if (!notice_info.empty()) {
             const auto DELETE_POPUP_SIZE = ImVec2(756.0f * SCALE.x, 436.0f * SCALE.y);
@@ -475,10 +503,9 @@ static void draw_notice_info(GuiState &gui, EmuEnvState &emuenv) {
                 ImGui::SetNextWindowPos(ImVec2(VIEWPORT_POS.x + (VIEWPORT_SIZE.x / 2.f) - (DELETE_POPUP_SIZE.x / 2.f), VIEWPORT_POS.y + (VIEWPORT_SIZE.y / 2.f) - (DELETE_POPUP_SIZE.y / 2.f)));
                 if (ImGui::BeginPopupModal("Delete All", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings)) {
                     ImGui::SetWindowFontScale(1.4f * RES_SCALE.x);
-                    const auto notif_deleted = lang["notif_deleted"].c_str();
-                    auto common = emuenv.common_dialog.lang.common;
-                    ImGui::SetCursorPos(ImVec2((DELETE_POPUP_SIZE.x / 2.f) - (ImGui::CalcTextSize(notif_deleted).x / 2.f), (DELETE_POPUP_SIZE.y / 2.f) - (46.f * SCALE.y)));
-                    ImGui::TextColored(GUI_COLOR_TEXT, "%s", notif_deleted);
+                    auto &common = emuenv.common_dialog.lang.common;
+                    ImGui::SetCursorPosY((DELETE_POPUP_SIZE.y / 2.f) - (46.f * SCALE.y));
+                    TextColoredCentered(GUI_COLOR_TEXT, lang["notif_deleted"].c_str());
                     ImGui::SetCursorPos(ImVec2((DELETE_POPUP_SIZE.x / 2) - (BUTTON_SIZE.x + (20.f * SCALE.x)), DELETE_POPUP_SIZE.y - BUTTON_SIZE.y - (24.0f * SCALE.y)));
                     if (ImGui::Button(common["cancel"].c_str(), BUTTON_SIZE) || ImGui::IsKeyPressed(static_cast<ImGuiKey>(emuenv.cfg.keyboard_button_circle))) {
                         ImGui::CloseCurrentPopup();
@@ -491,7 +518,6 @@ static void draw_notice_info(GuiState &gui, EmuEnvState &emuenv) {
                         gui.notice_info_icon.clear();
                         notice_list["global"].clear();
                         notice_list[emuenv.io.user_id].clear();
-                        clean_notice_info_new(emuenv.io.user_id);
                         save_notice_list(emuenv);
                         notice_info_state = false;
                         ImGui::CloseCurrentPopup();
@@ -510,19 +536,19 @@ static void draw_notice_info(GuiState &gui, EmuEnvState &emuenv) {
 
     const auto display_size = ImGui::GetIO().DisplaySize;
     draw_list->AddRectFilled(ImVec2(0.f, 0.f), ImVec2(display_size.x, VIEWPORT_POS.y), IM_COL32(0.f, 0.f, 0.f, 255.f));
-    draw_list->AddRectFilled(ImVec2(VIEWPORT_POS.x + VIEWPORT_SIZE.x, VIEWPORT_POS.y), ImVec2(display_size.x, VIEWPORT_POS.y + display_size.y), IM_COL32(0.f, 0.f, 0.f, 255.f));
+    draw_list->AddRectFilled(ImVec2(VIEWPORT_WIDTH_POS_MAX, VIEWPORT_POS.y), ImVec2(display_size.x, VIEWPORT_POS.y + display_size.y), IM_COL32(0.f, 0.f, 0.f, 255.f));
 }
 
 void draw_information_bar(GuiState &gui, EmuEnvState &emuenv) {
-    const ImVec2 VIEWPORT_POS(emuenv.viewport_pos.x, emuenv.viewport_pos.y);
-    const ImVec2 VIEWPORT_SIZE(emuenv.viewport_size.x, emuenv.viewport_size.y);
-    const ImVec2 RES_SCALE(VIEWPORT_SIZE.x / emuenv.res_width_dpi_scale, VIEWPORT_SIZE.y / emuenv.res_height_dpi_scale);
-    const ImVec2 SCALE(RES_SCALE.x * emuenv.dpi_scale, RES_SCALE.y * emuenv.dpi_scale);
+    const ImVec2 VIEWPORT_POS(emuenv.logical_viewport_pos.x, emuenv.logical_viewport_pos.y);
+    const ImVec2 VIEWPORT_SIZE(emuenv.logical_viewport_size.x, emuenv.logical_viewport_size.y);
+    const ImVec2 RES_SCALE(emuenv.gui_scale.x, emuenv.gui_scale.y);
+    const ImVec2 SCALE(RES_SCALE.x * emuenv.manual_dpi_scale, RES_SCALE.y * emuenv.manual_dpi_scale);
 
     const ImVec2 INFO_BAR_SIZE(VIEWPORT_SIZE.x, 32.f * SCALE.y);
 
-    const ImU32 DEFAULT_BAR_COLOR = 0xFF000000; // Black
-    const ImU32 DEFAULT_INDICATOR_COLOR = 0xFFFFFFFF; // White
+    constexpr ImU32 DEFAULT_BAR_COLOR = 0xFF000000; // Black
+    constexpr ImU32 DEFAULT_INDICATOR_COLOR = 0xFFFFFFFF; // White
 
     const auto is_12_hour_format = emuenv.cfg.sys_time_format == SCE_SYSTEM_PARAM_TIME_FORMAT_12HOUR;
     const auto is_notif_pos = !gui.vita_area.start_screen && (gui.vita_area.live_area_screen || gui.vita_area.home_screen) ? 78.f * SCALE.x : 0.f;
@@ -571,7 +597,7 @@ void draw_information_bar(GuiState &gui, EmuEnvState &emuenv) {
             const ImVec2 ICON_POS_MIN(VIEWPORT_POS.x + (INFO_BAR_SIZE.x / 2.f) - (14.f * SCALE.x) - (decal_app_icon_pos * SCALE.x) + (a * (34 * SCALE.x)), VIEWPORT_POS.y + (2.f * SCALE.y));
             const ImVec2 ICON_POS_MAX(ICON_POS_MIN.x + ICON_SIZE_SCALE, ICON_POS_MIN.y + ICON_SIZE_SCALE);
             const ImVec2 ICON_CENTER_POS(ICON_POS_MIN.x + (ICON_SIZE_SCALE / 2.f), ICON_POS_MIN.y + (ICON_SIZE_SCALE / 2.f));
-            const auto APPS_OPENED = gui.live_area_current_open_apps_list[a];
+            const auto &APPS_OPENED = gui.live_area_current_open_apps_list[a];
             auto &APP_ICON_TYPE = APPS_OPENED.starts_with("NPXS") && (APPS_OPENED != "NPXS10007") ? gui.app_selector.sys_apps_icon : gui.app_selector.user_apps_icon;
 
             // Check if icon exist
@@ -586,10 +612,10 @@ void draw_information_bar(GuiState &gui, EmuEnvState &emuenv) {
         }
     }
 
-    const auto PIX_FONT_SCALE = 19.2f / 24.f;
-    const auto DEFAULT_FONT_SCALE = ImGui::GetFontSize() / (19.2f * emuenv.dpi_scale);
-    const auto CLOCK_DEFAULT_FONT_SCALE = (24.f * emuenv.dpi_scale) * DEFAULT_FONT_SCALE;
-    const auto DAY_MOMENT_DEFAULT_FONT_SCALE = (18.f * emuenv.dpi_scale) * DEFAULT_FONT_SCALE;
+    constexpr auto PIX_FONT_SCALE = 19.2f / 24.f;
+    const auto DEFAULT_FONT_SCALE = ImGui::GetFontSize() / (19.2f * emuenv.manual_dpi_scale);
+    const auto CLOCK_DEFAULT_FONT_SCALE = (24.f * emuenv.manual_dpi_scale) * DEFAULT_FONT_SCALE;
+    const auto DAY_MOMENT_DEFAULT_FONT_SCALE = (18.f * emuenv.manual_dpi_scale) * DEFAULT_FONT_SCALE;
     const auto CLOCK_FONT_SIZE_SCALE = CLOCK_DEFAULT_FONT_SCALE / ImGui::GetFontSize();
     const auto DAY_MOMENT_FONT_SIZE_SCALE = DAY_MOMENT_DEFAULT_FONT_SCALE / ImGui::GetFontSize();
 
@@ -609,13 +635,46 @@ void draw_information_bar(GuiState &gui, EmuEnvState &emuenv) {
     const auto DAY_MOMENT_POS = ImVec2(CLOCK_POS.x + CLOCK_SIZE_SCALE.x + (6.f * SCALE.x), CLOCK_POS.y + (CLOCK_SIZE_SCALE.y - DAY_MOMENT_SIZE_SCALE.y));
 
     // Draw clock
-    draw_list->AddText(gui.vita_font, CLOCK_DEFAULT_FONT_SCALE * RES_SCALE.x, CLOCK_POS, is_theme_color ? indicator_color : DEFAULT_INDICATOR_COLOR, DATE_TIME[DateTime::CLOCK].c_str());
+    draw_list->AddText(gui.vita_font[emuenv.current_font_level], CLOCK_DEFAULT_FONT_SCALE * RES_SCALE.x, CLOCK_POS, is_theme_color ? indicator_color : DEFAULT_INDICATOR_COLOR, DATE_TIME[DateTime::CLOCK].c_str());
     if (emuenv.io.user_id.empty() || is_12_hour_format)
-        draw_list->AddText(gui.vita_font, DAY_MOMENT_DEFAULT_FONT_SCALE * RES_SCALE.x, DAY_MOMENT_POS, is_theme_color ? indicator_color : DEFAULT_INDICATOR_COLOR, DATE_TIME[DateTime::DAY_MOMENT].c_str());
+        draw_list->AddText(gui.vita_font[emuenv.current_font_level], DAY_MOMENT_DEFAULT_FONT_SCALE * RES_SCALE.x, DAY_MOMENT_POS, is_theme_color ? indicator_color : DEFAULT_INDICATOR_COLOR, DATE_TIME[DateTime::DAY_MOMENT].c_str());
 
-    // Draw battery
-    draw_list->AddRectFilled(ImVec2(VIEWPORT_POS.x + INFO_BAR_SIZE.x - (54.f * SCALE.x) - is_notif_pos, VIEWPORT_POS.y + (12.f * SCALE.y)), ImVec2(VIEWPORT_POS.x + INFO_BAR_SIZE.x - (50.f * SCALE.x) - is_notif_pos, VIEWPORT_POS.y + (20 * SCALE.y)), IM_COL32(81.f, 169.f, 32.f, 255.f));
-    draw_list->AddRectFilled(ImVec2(VIEWPORT_POS.x + INFO_BAR_SIZE.x - (50.f * SCALE.x) - is_notif_pos, VIEWPORT_POS.y + (5.f * SCALE.y)), ImVec2(VIEWPORT_POS.x + INFO_BAR_SIZE.x - (12.f * SCALE.x) - is_notif_pos, VIEWPORT_POS.y + (27 * SCALE.y)), IM_COL32(81.f, 169.f, 32.f, 255.f), 2.f * SCALE.x, ImDrawFlags_RoundCornersAll);
+    // Set full size and position of battery
+    const auto FULL_BATTERY_SIZE = 38.f * SCALE.x;
+    const auto BATTERY_HEIGHT_MIN_POS = VIEWPORT_POS.y + (5.f * SCALE.y);
+    const ImVec2 BATTERY_MAX_POS(VIEWPORT_POS.x + INFO_BAR_SIZE.x - (12.f * SCALE.x) - is_notif_pos, BATTERY_HEIGHT_MIN_POS + (22 * SCALE.y));
+    const ImVec2 BATTERY_BASE_MIN_POS(BATTERY_MAX_POS.x - FULL_BATTERY_SIZE - (4.f * SCALE.x), VIEWPORT_POS.y + (12.f * SCALE.y));
+    const ImVec2 BATTERY_BASE_MAX_POS(BATTERY_BASE_MIN_POS.x + (4.f * SCALE.x), BATTERY_BASE_MIN_POS.y + (8 * SCALE.y));
+
+    // Draw battery background
+    constexpr ImU32 BATTERY_BG_COLOR = IM_COL32(128.f, 124.f, 125.f, 255.f);
+    draw_list->AddRectFilled(BATTERY_BASE_MIN_POS, BATTERY_BASE_MAX_POS, BATTERY_BG_COLOR);
+    draw_list->AddRectFilled(ImVec2(BATTERY_MAX_POS.x - FULL_BATTERY_SIZE, BATTERY_HEIGHT_MIN_POS), BATTERY_MAX_POS, BATTERY_BG_COLOR, 2.f * SCALE.x, ImDrawFlags_RoundCornersAll);
+
+    // Set default battery size
+    auto battery_size = FULL_BATTERY_SIZE;
+
+    // Get battery level and adjust size accordingly to the battery level
+    int32_t res;
+    SDL_GetPowerInfo(NULL, &res);
+    if ((res >= 0) && (res <= 75)) {
+        if (res <= 25)
+            battery_size *= 25.f;
+        else if (res <= 50)
+            battery_size *= 50.f;
+        else
+            battery_size *= 75.f;
+
+        battery_size /= 100.f;
+    }
+
+    // Set battery color depending on battery level: red for levels less than or equal to 25% and green for levels above this threshold.
+    const ImU32 BATTERY_COLOR = (res >= 0) && (res <= 25) ? IM_COL32(225.f, 50.f, 50.f, 255.f) : IM_COL32(90.f, 200.f, 30.f, 255.f);
+
+    // Draw battery level
+    if (battery_size == FULL_BATTERY_SIZE)
+        draw_list->AddRectFilled(BATTERY_BASE_MIN_POS, BATTERY_BASE_MAX_POS, BATTERY_COLOR);
+    draw_list->AddRectFilled(ImVec2(BATTERY_MAX_POS.x - battery_size, BATTERY_HEIGHT_MIN_POS), BATTERY_MAX_POS, BATTERY_COLOR, 2.f * SCALE.x, ImDrawFlags_RoundCornersAll);
 
     if (emuenv.display.imgui_render && !gui.vita_area.start_screen && !gui.vita_area.live_area_screen && !gui.vita_area.user_management && !gui.help_menu.vita3k_update && get_sys_apps_state(gui) && (ImGui::IsWindowHovered(ImGuiHoveredFlags_None) || ImGui::IsItemClicked(0)))
         gui.vita_area.information_bar = false;

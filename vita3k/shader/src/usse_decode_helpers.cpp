@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@ namespace shader::usse {
  * \brief Changes TEMP registers to FPINTERNAL if certain conditions are met
  */
 static void check_reg_internal(Operand &inout_reg, bool is_double_regs, uint8_t reg_bits) {
-    // TODO: Check top bit if neccessary! Sometimes it may contains type info.
+    // TODO: Check top bit if necessary! Sometimes it may contains type info.
     const auto temps = is_double_regs ? 8 : 4;
     const auto max_reg_num = 1 << reg_bits;
     const auto temp_reg_limit = max_reg_num - temps;

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,14 +15,13 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-#include <gxm/functions.h>
 #include <gxm/types.h>
 #include <shader/gxp_parser.h>
 #include <shader/usse_program_analyzer.h>
+#include <shader/usse_types.h>
 
 #include <cassert>
-
-#include <shader/usse_types.h>
+#include <queue>
 
 namespace shader::usse {
 bool is_kill(const std::uint64_t inst) {
@@ -226,8 +225,7 @@ void get_attribute_informations(const SceGxmProgram &program, AttributeInformati
             }
 
             bool regformat = (vertex_varyings_ptr->untyped_pa_regs & ((uint64_t)1 << parameter.resource_index)) != 0;
-
-            locmap.emplace(parameter.resource_index, AttributeInformation(fcount_allocated / 4, parameter.type, is_integer, is_signed, regformat));
+            locmap.emplace(parameter.resource_index, AttributeInformation(fcount_allocated / 4, parameter.type, parameter.component_count, is_integer, is_signed, regformat));
             fcount_allocated += ((parameter.array_size * parameter.component_count + 3) / 4) * 4;
         }
     }
@@ -301,7 +299,7 @@ void USSELoopNode::set_content_block(USSEBaseNodeInstance &node) {
     children[0] = std::move(node);
 }
 
-void analyze(USSEBlockNode &root, USSEOffset end_offset, AnalyzeReadFunction read_func) {
+void analyze(USSEBlockNode &root, USSEOffset end_offset, const AnalyzeReadFunction &read_func) {
     struct BlockInvestigateRequest {
         USSEOffset begin_offset;
         USSEOffset end_offset;
@@ -448,7 +446,7 @@ void analyze(USSEBlockNode &root, USSEOffset end_offset, AnalyzeReadFunction rea
                                 auto end_ite = branches_from.lower_bound(branch_from_result->second.dest - 1);
 
                                 if ((begin_ite != branches_from.end()) && (end_ite != branches_from.end())) {
-                                    for (; begin_ite != end_ite; begin_ite++) {
+                                    for (; begin_ite != end_ite; ++begin_ite) {
                                         if (begin_ite->second.dest > branch_from_result->second.dest) {
                                             else_exist = true;
                                             else_end_offset = begin_ite->second.dest;
@@ -498,7 +496,7 @@ void analyze(USSEBlockNode &root, USSEOffset end_offset, AnalyzeReadFunction rea
             } else if (branches_to_back.contains(baddr) && (request.block_node->start_offset() != baddr)) {
                 // The loop continue target should be unconditional and farest
                 std::uint32_t found_offset = 0xFFFFFFFF;
-                for (auto ite = branch_to_result.first; ite != branch_to_result.second; ite++) {
+                for (auto ite = branch_to_result.first; ite != branch_to_result.second; ++ite) {
                     if ((ite->second.pred == 0) && ((found_offset == 0xFFFFFFFF) || (found_offset < ite->second.offset))) {
                         found_offset = ite->second.offset;
                     }
@@ -538,7 +536,7 @@ void analyze(USSEBlockNode &root, USSEOffset end_offset, AnalyzeReadFunction rea
 
                 // Either if the instruction has different predicate with the block,
                 // or the predicate value is being invalidated (overwritten)
-                // which means continuing is obselete. Stop now
+                // which means continuing is obsolete. Stop now
                 if (pred != current_code->condition) {
                     current_code->size = baddr - current_code->offset;
                     offset_end = baddr;

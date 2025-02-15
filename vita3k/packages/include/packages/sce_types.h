@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -22,10 +22,7 @@
 
 #pragma once
 
-#include <packages/functions.h>
 #include <util/log.h>
-
-#include <map>
 
 // Credits to TeamMolecule for their original work on this https://github.com/TeamMolecule/sceutils
 
@@ -172,7 +169,7 @@ public:
 
         auto &key_entries = *self_type;
 
-        for (auto item : key_entries.second) {
+        for (const auto &item : key_entries.second) {
             if ((sysver < 0 || (sysver >= item.minver && sysver <= item.maxver)) && (keyrev < 0 || keyrev == item.keyrev)) {
                 return item;
             }
@@ -216,7 +213,7 @@ public:
         }
         this->sce_type = SceType(_sce_type);
         this->platform = SelfPlatform(_platform);
-    };
+    }
 };
 
 class SelfHeader {
@@ -248,7 +245,7 @@ public:
         memcpy(&sceversion_offset, &data[64], 8);
         memcpy(&controlinfo_offset, &data[72], 8);
         memcpy(&controlinfo_length, &data[80], 8);
-    };
+    }
 };
 
 struct AppInfoHeader {
@@ -269,7 +266,7 @@ struct AppInfoHeader {
         memcpy(&field_18, &data[24], 8);
 
         this->self_type = SelfType(_self_type);
-    };
+    }
 };
 
 class ElfHeader {
@@ -307,7 +304,7 @@ public:
         memcpy(&e_shentsize, &data[46], 2);
         memcpy(&e_shnum, &data[48], 2);
         memcpy(&e_shstrndx, &data[50], 2);
-    };
+    }
 };
 
 class ElfPhdr {
@@ -654,11 +651,8 @@ public:
 };
 
 void register_keys(KeyStore &SCE_KEYS, int type);
-void extract_fat(const std::wstring &partition_path, const std::string &partition, const std::wstring &pref_path);
+void extract_fat(const fs::path &partition_path, const std::string &partition, const fs::path &pref_path);
 std::string decompress_segments(const std::vector<uint8_t> &decrypted_data, const uint64_t &size);
-void self2elf(const fs::path &infile, const fs::path &outfile, KeyStore &SCE_KEYS, unsigned char *klictxt, uint64_t *authid);
-void make_fself(const fs::path &input_file, const fs::path &output_file, uint64_t authid);
 std::tuple<uint64_t, SelfType> get_key_type(std::ifstream &file, const SceHeader &sce_hdr);
-std::vector<SceSegment> get_segments(std::ifstream &file, const SceHeader &sce_hdr, KeyStore &SCE_KEYS, uint64_t sysver = -1, SelfType self_type = static_cast<SelfType>(0), int keytype = 0, unsigned char *klictxt = 0);
-void decrypt_fself(const fs::path &file_path, KeyStore &SCE_KEYS, unsigned char *klictxt);
-bool is_self(const fs::path &file_path);
+std::vector<SceSegment> get_segments(const uint8_t *input, const SceHeader &sce_hdr, KeyStore &SCE_KEYS, uint64_t sysver = -1, SelfType self_type = static_cast<SelfType>(0), int keytype = 0, const uint8_t *klic = 0);
+std::vector<uint8_t> decrypt_fself(const std::vector<uint8_t> fself, const uint8_t *klic);

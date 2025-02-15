@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -37,7 +37,7 @@ inline std::string to_debug_str<SceDisplaySetBufSync>(const MemState &mem, SceDi
     return std::to_string(type);
 }
 
-enum SceDisplayErrorCode {
+enum SceDisplayErrorCode : uint32_t {
     SCE_DISPLAY_ERROR_OK = 0,
     SCE_DISPLAY_ERROR_INVALID_HEAD = 0x80290000,
     SCE_DISPLAY_ERROR_INVALID_VALUE = 0x80290001,
@@ -68,3 +68,4 @@ struct SceDisplayFrameBuf2 : public SceDisplayFrameBuf {
 
 DECL_EXPORT(SceInt32, _sceDisplayGetFrameBuf, SceDisplayFrameBuf *pFrameBuf, SceDisplaySetBufSync sync, uint32_t *pFrameBuf_size);
 DECL_EXPORT(SceInt32, _sceDisplaySetFrameBuf, const SceDisplayFrameBuf *pFrameBuf, SceDisplaySetBufSync sync, uint32_t *pFrameBuf_size);
+DECL_EXPORT(SceInt32, _sceDisplayGetMaximumFrameBufResolution, SceInt32 *width, SceInt32 *height);

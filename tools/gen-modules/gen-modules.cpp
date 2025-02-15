@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
 
 #include <yaml-cpp/yaml.h>
 
-#ifdef WIN32
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #else
@@ -98,7 +98,7 @@ static Modules parse_db(const Node &db) {
 
 static void gen_license_comment(std::ostream &dst) {
     dst << "// Vita3K emulator project" << '\n';
-    dst << "// Copyright (C) 2023 Vita3K team" << '\n';
+    dst << "// Copyright (C) 2025 Vita3K team" << '\n';
     dst << "//" << '\n';
     dst << "// This program is free software; you can redistribute it and/or modify" << '\n';
     dst << "// it under the terms of the GNU General Public License as published by" << '\n';
@@ -148,7 +148,7 @@ static void gen_module_stubs(const Modules &modules) {
     for (const Module &module : modules) {
         const std::string module_path = "vita3k/modules/" + module.first;
 
-#ifdef WIN32
+#ifdef _WIN32
         CreateDirectoryA(module_path.c_str(), nullptr);
 #else
         const int mode = S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH;

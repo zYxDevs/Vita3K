@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,7 +15,6 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-#include <renderer/functions.h>
 #include <renderer/profile.h>
 
 #include <renderer/gl/functions.h>
@@ -23,8 +22,6 @@
 
 #include <renderer/state.h>
 #include <renderer/types.h>
-
-#include <sstream>
 
 #include <gxm/types.h>
 #include <util/log.h>
@@ -59,7 +56,7 @@ static GLenum translate_primitive(SceGxmPrimitiveType primType) {
 }
 
 void draw(GLState &renderer, GLContext &context, const FeatureState &features, SceGxmPrimitiveType type, SceGxmIndexFormat format, void *indices, size_t count, uint32_t instance_count,
-    MemState &mem, const char *cache_path, const char *title_id, const char *self_name, const Config &config) {
+    MemState &mem, const Config &config) {
     R_PROFILE(__func__);
 
     GLuint program_id = context.last_draw_program;
@@ -71,7 +68,7 @@ void draw(GLState &renderer, GLContext &context, const FeatureState &features, S
     // If it's different, we need to switch. Else just stick to it.
     if (context.record.vertex_program.get(mem)->renderer_data->hash != context.last_draw_vertex_program_hash || context.record.fragment_program.get(mem)->renderer_data->hash != context.last_draw_fragment_program_hash) {
         // Need to recompile!
-        SharedGLObject program = gl::compile_program(renderer, context, context.record, features, mem, config.shader_cache, config.spirv_shader, gxm_fragment_program.is_maskupdate, cache_path, title_id, self_name);
+        SharedGLObject program = gl::compile_program(renderer, context, context.record, features, mem, config.shader_cache, config.spirv_shader, gxm_fragment_program.is_maskupdate);
 
         LOG_ERROR_IF(!program, "Fail to get program!");
 
@@ -155,7 +152,7 @@ void draw(GLState &renderer, GLContext &context, const FeatureState &features, S
     }
     frag_ublock.writing_mask = context.record.writing_mask;
     frag_ublock.use_raw_image = static_cast<float>(use_raw_image);
-    frag_ublock.res_multiplier = static_cast<float>(renderer.res_multiplier);
+    frag_ublock.res_multiplier = renderer.res_multiplier;
     const bool has_msaa = context.render_target->multisample_mode;
     const bool has_downscale = context.record.color_surface.downscale;
     if (has_msaa && !has_downscale)

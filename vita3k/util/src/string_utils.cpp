@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,6 +18,11 @@
 #include <util/string_utils.h>
 
 #include <util/log.h>
+
+#include <algorithm>
+#include <codecvt>
+#include <locale>
+#include <sstream>
 
 namespace string_utils {
 
@@ -60,7 +65,7 @@ std::string remove_special_chars(std::string str) {
         case '>':
         case '|':
         case '*':
-            c = ' ';
+            c = '_';
             break;
         default:
             continue;
@@ -79,8 +84,8 @@ void replace(std::string &str, const std::string &in, const std::string &out) {
     }
 }
 
-std::basic_string<uint8_t> string_to_byte_array(std::string string) {
-    std::basic_string<uint8_t> hex_bytes;
+std::vector<uint8_t> string_to_byte_array(const std::string &string) {
+    std::vector<uint8_t> hex_bytes;
 
     for (size_t i = 0; i < string.length(); i += 2) {
         uint16_t byte;
@@ -91,7 +96,7 @@ std::basic_string<uint8_t> string_to_byte_array(std::string string) {
     return hex_bytes;
 }
 
-#ifdef WIN32
+#ifdef _MSC_VER
 std::string utf16_to_utf8(const std::u16string &str) {
     std::wstring_convert<std::codecvt_utf8_utf16<int16_t>, int16_t> myconv;
     auto p = reinterpret_cast<const int16_t *>(str.data());
@@ -103,8 +108,8 @@ std::u16string utf8_to_utf16(const std::string &str) {
         "std::wstring and std::u16string are expected to have the same character size");
 
     std::wstring_convert<std::codecvt_utf8_utf16<int16_t>, int16_t> myconv;
-    auto p = reinterpret_cast<const char *>(str.data());
-    auto a = myconv.from_bytes(p, p + std::strlen(p));
+    const char *p = str.data();
+    auto a = myconv.from_bytes(p, p + str.size());
     return std::u16string(a.begin(), a.end());
 }
 #else

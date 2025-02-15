@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,8 +20,6 @@
 #include <gui/state.h>
 
 #include <emuenv/state.h>
-
-struct ImVec4;
 
 namespace gui {
 
@@ -78,5 +76,11 @@ void draw_trophy_collection(GuiState &gui, EmuEnvState &emuenv);
 void draw_user_management(GuiState &gui, EmuEnvState &emuenv);
 
 void reevaluate_code(GuiState &gui, EmuEnvState &emuenv);
+
+void SetTooltipEx(const char *tooltip);
+void TextColoredCentered(const ImVec4 &col, const char *text);
+void TextCentered(const char *text);
+void TextColoredCentered(const ImVec4 &col, const char *text, float wrap_width);
+void TextCentered(const char *text, float wrap_width);
 
 } // namespace gui

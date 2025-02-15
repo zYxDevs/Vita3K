@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -135,7 +135,7 @@ bool H264DecoderState::receive(uint8_t *data, DecoderSize *size) {
 }
 
 void H264DecoderState::configure(void *options) {
-    auto *opt = reinterpret_cast<H264DecoderOptions *>(options);
+    auto *opt = static_cast<H264DecoderOptions *>(options);
 
     pts = static_cast<uint64_t>(opt->pts_upper) << 32u | static_cast<uint64_t>(opt->pts_lower);
     dts = static_cast<uint64_t>(opt->dts_upper) << 32u | static_cast<uint64_t>(opt->dts_lower);

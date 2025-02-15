@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -22,29 +22,23 @@
 
 #include <algorithm>
 #include <cstring>
+#include <util/vector_utils.h>
 
 namespace ngs {
 
 bool VoiceScheduler::deque_voice(Voice *voice) {
     const std::lock_guard<std::recursive_mutex> guard(mutex);
 
-    auto voice_in = std::find(queue.begin(), queue.end(), voice);
-
-    if (voice_in == queue.end()) {
-        return false;
-    }
-
-    queue.erase(voice_in);
-    return true;
+    return vector_utils::erase_first(queue, voice);
 }
 
 void VoiceScheduler::deque_insert(const MemState &mem, Voice *voice) {
     const std::lock_guard<std::recursive_mutex> guard(mutex);
-    int32_t lowest_dest_pos = static_cast<int32_t>(queue.size());
+    int32_t lowest_dest_pos = queue.size();
 
     // Check its dependencies position
-    for (size_t i = 0; i < voice->patches.size(); i++) {
-        for (const auto &patch : voice->patches[i]) {
+    for (auto &patches : voice->patches) {
+        for (const auto patch : patches) {
             if (!patch) {
                 continue;
             }
@@ -127,7 +121,7 @@ void VoiceScheduler::update(KernelState &kern, const MemState &mem, const SceUID
     std::unique_lock<std::recursive_mutex> scheduler_lock(mutex);
     is_updating = true;
 
-    // make a copy of the queue, this way we have no issue if it is modified in a callbck
+    // make a copy of the queue, this way we have no issue if it is modified in a callback
     std::vector<ngs::Voice *> queue_copy = queue;
 
     // Do a first routine to clear inputs from previous update session
@@ -194,13 +188,7 @@ void VoiceScheduler::update(KernelState &kern, const MemState &mem, const SceUID
 
 int32_t VoiceScheduler::get_position(Voice *v) {
     // we assume the scheduler lock is being held when calling this function
-    auto result = std::find(queue.begin(), queue.end(), v);
-
-    if (result != queue.end()) {
-        return static_cast<int32_t>(std::distance(queue.begin(), result));
-    }
-
-    return -1;
+    return vector_utils::find_index(queue, v);
 }
 
 bool VoiceScheduler::resort_to_respect_dependencies(const MemState &mem, Voice *source) {

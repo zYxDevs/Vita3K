@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,8 +18,8 @@
 #pragma once
 
 #include <glutil/object.h>
-#include <string>
+#include <util/fs.h>
 
 namespace gl {
-UniqueGLObject load_shaders(const std::string &vertex_file_path, const std::string &fragment_file_path);
+UniqueGLObject load_shaders(const fs::path &vertex_file_path, const fs::path &fragment_file_path);
 }

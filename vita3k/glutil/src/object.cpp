@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -37,14 +37,14 @@ bool GLObject::init(GLuint name) {
     return name != 0;
 }
 
-bool GLObject::init(GLuint name, AggregateDeleter aggregate_deleter) {
+bool GLObject::init(GLuint name, const AggregateDeleter &aggregate_deleter) {
     if (aggregate_deleter)
         this->aggregate_deleter = aggregate_deleter;
 
     return init(name);
 }
 
-bool GLObject::init(GLuint name, SingularDeleter singular_deleter) {
+bool GLObject::init(GLuint name, const SingularDeleter &singular_deleter) {
     if (singular_deleter)
         this->singular_deleter = singular_deleter;
 

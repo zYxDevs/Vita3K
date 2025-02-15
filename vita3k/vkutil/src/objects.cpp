@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@
 #include "vkutil/vkutil.h"
 
 #include <util/align.h>
-#include <util/bit_cast.h>
 #include <util/log.h>
 
 namespace vkutil {
@@ -211,7 +210,7 @@ void HostRingBuffer::create() {
 }
 
 void HostRingBuffer::copy(vk::CommandBuffer cmd_buffer, const uint32_t size, const void *data, const uint32_t offset) {
-    memcpy(reinterpret_cast<uint8_t *>(buffer.mapped_data) + data_offset + offset, data, size);
+    memcpy(static_cast<uint8_t *>(buffer.mapped_data) + data_offset + offset, data, size);
 
     if (!is_coherent)
         allocator.flushAllocation(buffer.allocation, data_offset + offset, size);

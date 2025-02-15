@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,19 +17,17 @@
 
 #pragma once
 
-#include <crypto/hash.h>
 #include <glutil/object.h>
 #include <glutil/object_array.h>
 #include <renderer/types.h>
+#include <util/hash.h>
 
 #include <renderer/gl/ring_buffer.h>
 #include <renderer/texture_cache.h>
-#include <shader/usse_program_analyzer.h>
+#include <shader/uniform_block.h>
 
 #include <map>
 #include <memory>
-#include <set>
-#include <tuple>
 #include <vector>
 
 typedef void *SDL_GLContext;
@@ -49,6 +47,7 @@ inline bool operator==(const ExcludedUniform &lhs, const ExcludedUniform &rhs) {
 }
 
 typedef std::map<Sha256Hash, SharedGLObject> ShaderCache;
+typedef std::tuple<Sha256Hash, Sha256Hash> ProgramHashes;
 typedef std::map<ProgramHashes, SharedGLObject> ProgramCache;
 typedef std::vector<ExcludedUniform> ExcludedUniforms; // vector instead of unordered_set since it's much faster for few elements
 typedef std::map<GLuint, GLenum> UniformTypes;

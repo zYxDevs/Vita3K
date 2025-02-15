@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -23,12 +23,10 @@
 #include <renderer/types.h>
 
 #include "types.h"
-#include <features/state.h>
 
 #include <SDL.h>
 
-#include <map>
-#include <string>
+#include <string_view>
 #include <vector>
 
 namespace renderer::gl {
@@ -44,7 +42,7 @@ struct GLState : public renderer::State {
 
     ScreenRenderer screen_renderer;
 
-    bool init(const fs::path &static_assets, const bool hashless_texture_cache) override;
+    bool init() override;
     void late_init(const Config &cfg, const std::string_view game_id, MemState &mem) override;
 
     TextureCache *get_texture_cache() override {
@@ -54,10 +52,15 @@ struct GLState : public renderer::State {
     void render_frame(const SceFVector2 &viewport_pos, const SceFVector2 &viewport_size, DisplayState &display,
         const GxmState &gxm, MemState &mem) override;
     void swap_window(SDL_Window *window) override;
+    std::vector<uint32_t> dump_frame(DisplayState &display, uint32_t &width, uint32_t &height) override;
+
     int get_supported_filters() override;
     void set_screen_filter(const std::string_view &filter) override;
     int get_max_anisotropic_filtering() override;
     void set_anisotropic_filtering(int anisotropic_filtering) override;
+    int get_max_2d_texture_width() override;
+
+    std::string_view get_gpu_name() override;
 
     void precompile_shader(const ShadersHash &hash) override;
     void preclose_action() override;

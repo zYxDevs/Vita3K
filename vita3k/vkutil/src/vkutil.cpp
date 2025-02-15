@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,7 +18,6 @@
 #include "vkutil/vkutil.h"
 
 #include "util/fs.h"
-#include "util/log.h"
 
 namespace vkutil {
 
@@ -50,8 +49,7 @@ void end_single_time_command(vk::Device device, vk::Queue queue, vk::CommandPool
     device.freeCommandBuffers(cmd_pool, cmd_buffer);
 }
 
-vk::ShaderModule load_shader(vk::Device device, const std::string &path) {
-    const auto shader_path = fs::path(path);
+vk::ShaderModule load_shader(vk::Device device, const fs::path &shader_path) {
     fs::ifstream is(shader_path, fs::ifstream::binary);
     if (!is) {
         return {};
@@ -74,7 +72,7 @@ vk::ShaderModule load_shader(vk::Device device, const std::string &path) {
 vk::ShaderModule load_shader(vk::Device device, const void *data, const uint32_t size) {
     vk::ShaderModuleCreateInfo shader_info{
         .codeSize = size,
-        .pCode = reinterpret_cast<const uint32_t *>(data)
+        .pCode = static_cast<const uint32_t *>(data)
     };
 
     return device.createShaderModule(shader_info);
@@ -140,7 +138,7 @@ static constexpr ImageLayoutTransition layout_transitions[] = {
         vk::ImageLayout::eGeneral,
         vk::PipelineStageFlagBits::eFragmentShader | vk::PipelineStageFlagBits::eComputeShader,
         vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite },
-    // DepthReadOnly
+    // DepthStencilReadOnly
     {
         vk::ImageLayout::eDepthStencilReadOnlyOptimal,
         vk::PipelineStageFlagBits::eFragmentShader,

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -23,14 +23,11 @@
 #include <util/log.h>
 #include <util/tracy.h>
 
-#include <algorithm>
-#include <array>
-
 TRACY_MODULE_NAME(SceCtrl);
 
 template <>
-std::string to_debug_str<SceCtrlPadInputMode>(const MemState &mem, SceCtrlPadInputMode mode) {
-    switch (mode) {
+std::string to_debug_str<SceCtrlPadInputMode>(const MemState &mem, SceCtrlPadInputMode type) {
+    switch (type) {
     case SCE_CTRL_MODE_DIGITAL:
         return "SCE_CTRL_MODE_DIGITAL";
     case SCE_CTRL_MODE_ANALOG:
@@ -38,7 +35,7 @@ std::string to_debug_str<SceCtrlPadInputMode>(const MemState &mem, SceCtrlPadInp
     case SCE_CTRL_MODE_ANALOG_WIDE:
         return "SCE_CTRL_MODE_ANALOG_WIDE";
     }
-    return std::to_string(mode);
+    return std::to_string(type);
 }
 
 EXPORT(int, sceCtrlClearRapidFire) {
@@ -73,7 +70,6 @@ EXPORT(int, sceCtrlGetButtonIntercept) {
 
 EXPORT(int, sceCtrlGetControllerPortInfo, SceCtrlPortInfo *info) {
     TRACY_FUNC(sceCtrlGetControllerPortInfo, info);
-    CtrlState &state = emuenv.ctrl;
     info->port[0] = emuenv.cfg.current_config.pstv_mode ? SCE_CTRL_TYPE_VIRT : SCE_CTRL_TYPE_PHY;
     for (int i = 0; i < SCE_CTRL_MAX_WIRELESS_NUM; i++) {
         info->port[i + 1] = (emuenv.cfg.current_config.pstv_mode && !emuenv.ctrl.free_ports[i]) ? get_type_of_controller(i) : SCE_CTRL_TYPE_UNPAIRED;
@@ -199,7 +195,8 @@ EXPORT(int, sceCtrlSetActuator, int port, const SceCtrlActuator *pState) {
 
     CtrlState &state = emuenv.ctrl;
     for (const auto &controller : state.controllers) {
-        if (controller.second.port == port) {
+        if (controller.second.port + 1 == port) {
+            // sceCtrl ports are 1-based and SDL_GameController index is 0-based. Need to convert.
             SDL_GameControllerRumble(controller.second.controller.get(), pState->small * 655.35f, pState->large * 655.35f, SDL_HAPTIC_INFINITY);
 
             return 0;

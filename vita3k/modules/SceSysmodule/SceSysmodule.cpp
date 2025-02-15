@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -25,8 +25,8 @@
 TRACY_MODULE_NAME(SceSysmodule);
 
 template <>
-std::string to_debug_str<SceSysmoduleModuleId>(const MemState &mem, SceSysmoduleModuleId mode) {
-    switch (mode) {
+std::string to_debug_str<SceSysmoduleModuleId>(const MemState &mem, SceSysmoduleModuleId type) {
+    switch (type) {
     case SCE_SYSMODULE_INVALID: return "SCE_SYSMODULE_INVALID";
     case SCE_SYSMODULE_NET: return "SCE_SYSMODULE_NET";
     case SCE_SYSMODULE_HTTP: return "SCE_SYSMODULE_HTTP";
@@ -109,12 +109,12 @@ std::string to_debug_str<SceSysmoduleModuleId>(const MemState &mem, SceSysmodule
     case SCE_SYSMODULE_AVCDEC: return "SCE_SYSMODULE_AVCDEC";
     case SCE_SYSMODULE_JSON: return "SCE_SYSMODULE_JSON";
     }
-    return std::to_string(mode);
+    return std::to_string(type);
 }
 
 template <>
-std::string to_debug_str<SceSysmoduleInternalModuleId>(const MemState &mem, SceSysmoduleInternalModuleId mode) {
-    switch (mode) {
+std::string to_debug_str<SceSysmoduleInternalModuleId>(const MemState &mem, SceSysmoduleInternalModuleId type) {
+    switch (type) {
     case SCE_SYSMODULE_INTERNAL_JPEG_ENC_ARM: return "SCE_SYSMODULE_INTERNAL_JPEG_ENC_ARM";
     case SCE_SYSMODULE_INTERNAL_AUDIOCODEC: return "SCE_SYSMODULE_INTERNAL_AUDIOCODEC";
     case SCE_SYSMODULE_INTERNAL_JPEG_ARM: return "SCE_SYSMODULE_INTERNAL_JPEG_ARM";
@@ -155,10 +155,10 @@ std::string to_debug_str<SceSysmoduleInternalModuleId>(const MemState &mem, SceS
     case SCE_SYSMODULE_INTERNAL_LOCATION_INTERNAL: return "SCE_SYSMODULE_INTERNAL_LOCATION_INTERNAL";
     case SCE_SYSMODULE_INTERNAL_LOCATION_FACTORY: return "SCE_SYSMODULE_INTERNAL_LOCATION_FACTORY";
     }
-    return std::to_string(mode);
+    return std::to_string(type);
 }
 
-static bool is_modules_enable(EmuEnvState &emuenv, SceSysmoduleModuleId module_id) {
+static bool is_module_enabled(EmuEnvState &emuenv, SceSysmoduleModuleId module_id) {
     if (emuenv.cfg.current_config.modules_mode == ModulesMode::MANUAL)
         return !emuenv.cfg.current_config.lle_modules.empty() && is_lle_module(module_id, emuenv);
     else
@@ -167,7 +167,7 @@ static bool is_modules_enable(EmuEnvState &emuenv, SceSysmoduleModuleId module_i
 
 EXPORT(int, sceSysmoduleIsLoaded, SceSysmoduleModuleId module_id) {
     TRACY_FUNC(sceSysmoduleIsLoaded, module_id);
-    if (module_id < 0 || module_id > SYSMODULE_COUNT)
+    if (module_id > SYSMODULE_COUNT)
         return RET_ERROR(SCE_SYSMODULE_ERROR_INVALID_VALUE);
 
     if (is_module_loaded(emuenv.kernel, module_id))
@@ -184,7 +184,8 @@ EXPORT(int, sceSysmoduleIsLoadedInternal, SceSysmoduleInternalModuleId module_id
     if (((module_id & 0xFFFF) == 0) || ((module_id & 0xFFFF) > 0x29))
         return RET_ERROR(SCE_SYSMODULE_ERROR_INVALID_VALUE);
 
-    if (std::find(emuenv.kernel.loaded_internal_sysmodules.begin(), emuenv.kernel.loaded_internal_sysmodules.end(), module_id) != emuenv.kernel.loaded_internal_sysmodules.end())
+    std::lock_guard<std::mutex> guard(emuenv.kernel.mutex);
+    if (vector_utils::contains(emuenv.kernel.loaded_internal_sysmodules, module_id))
         return SCE_SYSMODULE_LOADED;
     else
         return RET_ERROR(SCE_SYSMODULE_ERROR_UNLOADED);
@@ -192,17 +193,18 @@ EXPORT(int, sceSysmoduleIsLoadedInternal, SceSysmoduleInternalModuleId module_id
 
 EXPORT(int, sceSysmoduleLoadModule, SceSysmoduleModuleId module_id) {
     TRACY_FUNC(sceSysmoduleLoadModule, module_id);
-    if (module_id < 0 || module_id > SYSMODULE_COUNT)
+    if (module_id > SYSMODULE_COUNT)
         return RET_ERROR(SCE_SYSMODULE_ERROR_INVALID_VALUE);
 
     LOG_INFO("Loading module ID: {}", to_debug_str(emuenv.mem, module_id));
-    if (is_modules_enable(emuenv, module_id)) {
+    if (is_module_enabled(emuenv, module_id)) {
         if (load_sys_module(emuenv, module_id))
             return SCE_SYSMODULE_LOADED;
         else
             return RET_ERROR(SCE_SYSMODULE_ERROR_FATAL);
     } else {
-        emuenv.kernel.loaded_sysmodules.push_back(module_id);
+        std::lock_guard<std::mutex> guard(emuenv.kernel.mutex);
+        emuenv.kernel.loaded_sysmodules[module_id] = {};
         return SCE_SYSMODULE_LOADED;
     }
 }
@@ -231,7 +233,15 @@ EXPORT(int, sceSysmoduleLoadModuleInternalWithArg, SceSysmoduleInternalModuleId 
 
 EXPORT(int, sceSysmoduleUnloadModule, SceSysmoduleModuleId module_id) {
     TRACY_FUNC(sceSysmoduleUnloadModule, module_id);
-    return UNIMPLEMENTED();
+
+    if (is_module_enabled(emuenv, module_id)) {
+        return unload_sys_module(emuenv, module_id);
+    } else {
+        std::lock_guard<std::mutex> guard(emuenv.kernel.mutex);
+        emuenv.kernel.loaded_sysmodules.erase(module_id);
+
+        return 0;
+    }
 }
 
 EXPORT(int, sceSysmoduleUnloadModuleInternal, SceSysmoduleInternalModuleId module_id) {

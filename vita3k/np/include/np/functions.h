@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,9 +17,10 @@
 
 #pragma once
 
-#include <cstdint>
 #include <np/common.h>
-#include <string>
+#include <util/fs.h>
+
+#include <cstdint>
 
 namespace np {
 struct CommunicationID;
@@ -51,7 +52,7 @@ bool deinit(NpTrophyState &state);
  *
  * \returns uint32_t(-1) on failure, else the handle to the context.
  */
-np::trophy::ContextHandle create_trophy_context(NpState &np, IOState *io, const std::wstring &pref_path,
+np::trophy::ContextHandle create_trophy_context(NpState &np, IOState *io, const fs::path &pref_path,
     const np::CommunicationID *custom_comm, const std::uint32_t lang, np::NpTrophyError *error);
 
 np::trophy::Context *get_trophy_context(NpTrophyState &state, const np::trophy::ContextHandle handle);

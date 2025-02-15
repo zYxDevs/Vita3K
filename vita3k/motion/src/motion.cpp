@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,7 +16,6 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 #include <motion/functions.h>
-#include <motion/motion.h>
 #include <motion/state.h>
 
 #include <ctrl/state.h>
@@ -45,7 +44,7 @@ SceFVector3 get_gyroscope(const MotionState &state) {
 Util::Quaternion<SceFloat> get_orientation(const MotionState &state) {
     auto quat = state.motion_data.GetOrientation();
     return {
-        { quat.xyz[1], quat.xyz[0], -quat.w },
+        { -quat.xyz[1], -quat.w, quat.xyz[0] },
         -quat.xyz[2],
     };
 }
@@ -56,6 +55,34 @@ SceBool get_gyro_bias_correction(const MotionState &state) {
 
 void set_gyro_bias_correction(MotionState &state, SceBool setValue) {
     state.motion_data.EnableGyroBias(setValue);
+}
+
+SceBool get_tilt_correction(MotionState &state) {
+    return state.motion_data.IsTiltCorrectionEnabled();
+}
+
+void set_tilt_correction(MotionState &state, SceBool setValue) {
+    state.motion_data.EnableTiltCorrection(setValue);
+}
+
+SceBool get_deadband(MotionState &state) {
+    return state.motion_data.IsDeadbandEnabled();
+}
+
+void set_deadband(MotionState &state, SceBool setValue) {
+    state.motion_data.EnableDeadband(setValue);
+}
+
+SceFloat get_angle_threshold(const MotionState &state) {
+    return state.motion_data.GetAngleThreshold();
+}
+
+void set_angle_threshold(MotionState &state, SceFloat setValue) {
+    state.motion_data.SetAngleThreshold(setValue);
+}
+
+SceFVector3 get_basic_orientation(const MotionState &state) {
+    return state.motion_data.GetBasicOrientation();
 }
 
 void refresh_motion(MotionState &state, CtrlState &ctrl_state) {
@@ -73,6 +100,7 @@ void refresh_motion(MotionState &state, CtrlState &ctrl_state) {
     Util::Vec3f accel;
     uint64_t accel_timestamp = 0;
 
+#if SDL_VERSION_ATLEAST(2, 26, 0)
     {
         // SDL_GameControllerGetSensorDataWithTimestamp is only supported on 2.26+
         // we need to check it because we are linking dynamically with SDL
@@ -82,7 +110,7 @@ void refresh_motion(MotionState &state, CtrlState &ctrl_state) {
         const bool can_use_timestamp_fn = sdl_version.minor >= 26;
 
         std::lock_guard<std::mutex> guard(ctrl_state.mutex);
-        for (auto controller : ctrl_state.controllers) {
+        for (const auto &controller : ctrl_state.controllers) {
             if (!found_gyro && controller.second.has_gyro) {
                 if (can_use_timestamp_fn && SDL_GameControllerGetSensorDataWithTimestamp(controller.second.controller.get(), SDL_SENSOR_GYRO, &gyro_timestamp, reinterpret_cast<float *>(&gyro), 3) == 0)
                     found_gyro = true;
@@ -98,6 +126,7 @@ void refresh_motion(MotionState &state, CtrlState &ctrl_state) {
             }
         }
     }
+#endif
 
     if (!found_accel && !found_gyro)
         return;
@@ -127,6 +156,7 @@ void refresh_motion(MotionState &state, CtrlState &ctrl_state) {
 
     state.motion_data.UpdateRotation(gyro_timestamp - state.last_gyro_timestamp);
     state.motion_data.UpdateOrientation(accel_timestamp - state.last_accel_timestamp);
+    state.motion_data.UpdateBasicOrientation();
 
     state.last_gyro_timestamp = gyro_timestamp;
     state.last_accel_timestamp = accel_timestamp;

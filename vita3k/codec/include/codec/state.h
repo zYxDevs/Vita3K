@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,15 +17,12 @@
 
 #pragma once
 
-#include <array>
 #include <cstdint>
-#include <memory>
 #include <queue>
 #include <string>
 
 struct AVFrame;
 struct AVPacket;
-struct AVIOContext;
 struct AVCodecContext;
 struct AVFormatContext;
 struct AVCodecParserContext;
@@ -46,8 +43,11 @@ enum DecoderColorSpace {
     COLORSPACE_UNKNOWN,
     COLORSPACE_GRAYSCALE,
     COLORSPACE_YUV444P,
+    COLORSPACE_YUV440P,
+    COLORSPACE_YUV441P,
     COLORSPACE_YUV422P,
     COLORSPACE_YUV420P,
+    COLORSPACE_YUV411P,
 };
 
 // glGet sort of API to use virtual stuff
@@ -121,11 +121,28 @@ struct H264DecoderState : public DecoderState {
     ~H264DecoderState() override;
 };
 
+struct MJpegPitch {
+    uint32_t x;
+    uint32_t y;
+};
+
+struct MJpegDecoderOptions {
+    bool use_standard_decoder;
+    int downscale_ratio;
+};
+
 struct MjpegDecoderState : public DecoderState {
+    bool use_standard_decoder = false;
+    int downscale_ratio = 1;
+
+    MJpegPitch pitch[4];
+
     DecoderColorSpace color_space_out;
 
     bool send(const uint8_t *data, uint32_t size) override;
     bool receive(uint8_t *data, DecoderSize *size) override;
+    void configure(void *options);
+    void get_pitch_info(MJpegPitch pitch[4]);
     DecoderColorSpace get_color_space();
 
     MjpegDecoderState();
@@ -206,7 +223,7 @@ public:
     bool receive(uint8_t *data, DecoderSize *size) override;
 
     explicit PCMDecoderState(const float dest_frequency);
-    ~PCMDecoderState();
+    ~PCMDecoderState() override;
 };
 
 struct AacDecoderState : public DecoderState {
@@ -221,7 +238,7 @@ struct AacDecoderState : public DecoderState {
     uint32_t get_es_size() override;
 
     explicit AacDecoderState(uint32_t sample_rate, uint32_t channels);
-    ~AacDecoderState();
+    ~AacDecoderState() override;
 };
 
 struct PlayerState {
@@ -262,8 +279,9 @@ struct PlayerState {
     ~PlayerState();
 };
 
-void convert_rgb_to_yuv(const uint8_t *rgba, uint8_t *yuv, uint32_t width, uint32_t height, const DecoderColorSpace color_space, int32_t inPitch);
-void convert_yuv_to_rgb(const uint8_t *yuv, uint8_t *rgba, uint32_t width, uint32_t height, const DecoderColorSpace color_space);
+void convert_rgb_to_yuv(const uint8_t *rgba, uint8_t *yuv, uint32_t width, uint32_t height, const DecoderColorSpace color_space, int32_t in_pitch);
+void convert_yuv_to_rgb(const uint8_t *yuv, uint8_t *rgba, uint32_t frame_width, const DecoderColorSpace color_space, bool is_bgra, MJpegPitch pitch[4]);
 int convert_yuv_to_jpeg(const uint8_t *yuv, uint8_t *jpeg, uint32_t width, uint32_t height, uint32_t max_size, const DecoderColorSpace color_space, int32_t compress_ratio);
 void copy_yuv_data_from_frame(AVFrame *frame, uint8_t *dest, const uint32_t width, const uint32_t height, bool is_p3);
+void calculate_pitch_info(uint32_t width, uint32_t height, int downscale_ratio, DecoderColorSpace color_space, bool use_standard_decoder, MJpegPitch output_pitch[4]);
 std::string codec_error_name(int error);

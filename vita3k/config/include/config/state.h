@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -108,6 +108,14 @@ public:
     bool console = false;
     bool load_app_list = false;
 
+    fs::path get_pref_path() const {
+        return fs_utils::utf8_to_path(pref_path);
+    }
+
+    void set_pref_path(const fs::path &new_pref_path) {
+        pref_path = fs_utils::path_to_utf8(new_pref_path);
+    }
+
     /**
      * @brief Config struct for per-app configurable settings
      *
@@ -118,10 +126,11 @@ public:
         bool cpu_opt = true;
         int modules_mode = ModulesMode::AUTOMATIC;
         std::vector<std::string> lle_modules = {};
-        bool pstv_mode = false;
+        int audio_volume = 100;
         bool ngs_enable = true;
+        bool pstv_mode = false;
         bool high_accuracy = false;
-        int resolution_multiplier = 1;
+        float resolution_multiplier = 1.0f;
         bool disable_surface_sync = false;
         std::string screen_filter = "Bilinear";
         bool v_sync = true;
@@ -130,6 +139,7 @@ public:
         bool import_textures = false;
         bool export_textures = false;
         bool export_as_png = false;
+        bool fps_hack = false;
         bool stretch_the_display_area = false;
         bool show_touchpad_cursor = true;
         bool psn_signed_in = false;
@@ -218,7 +228,7 @@ public:
 
         case _INVALID:
         default: {
-            return nullptr;
+            return {};
         }
         }
 #undef SWITCH_NAMES
@@ -251,7 +261,8 @@ public:
 
     // Load a function to the node network, and then update the members
     void load_new_config(const fs::path &path) override {
-        yaml_node = YAML::LoadFile(path.generic_path().string());
+        fs::ifstream fin(path);
+        yaml_node = YAML::Load(fin);
         update_members();
     }
 

@@ -12,7 +12,7 @@ All presets are named after `<target_os>-<project_generator>-<compiler>`, are au
 
 If you still want to use presets but none of them works for your setup, you can make new ones by creating a `CMakeUserPresets.json` file and you can check the specification [here](https://cmake.org/cmake/help/latest/manual/cmake-presets.7.html). Git will ignore this file.
 
-**Note: Vita3K doesn't support compilation for 32-bit/x86/i386 platforms. macOS is also considered unsupported due to incompatibilities with the OpenGL implementation.**
+**Note: Vita3K doesn't support compilation for 32-bit/x86/i386 platforms.**
 
 For convenience, the following building instructions are given as examples:
 
@@ -106,15 +106,21 @@ If you aren't satisfied with the way the Visual Studio integrates CMake projects
 
 ## Linux
 
-### Ubuntu/Debian
-
-Note: The CMake preset `linux-ninja-clang` makes use of the LLD linker, which will need to be installed in your system along with Clang.
-
 - Install dependencies.
+
+### Ubuntu/Debian
 
   ```sh
   sudo apt install git cmake ninja-build libsdl2-dev pkg-config libgtk-3-dev clang lld xdg-desktop-portal openssl libssl-dev
   ```
+
+### Fedora
+
+  ```sh
+  sudo dnf install git cmake ninja-build SDL2-devel pkg-config gtk3-devel clang lld xdg-desktop-portal openssl openssl-devel libstdc++-static
+  ```
+
+Note: The CMake preset `linux-ninja-clang` makes use of the LLD linker, which will need to be installed in your system along with Clang.
 
 - Clone this repo.
 

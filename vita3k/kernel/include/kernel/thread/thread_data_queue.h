@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,6 +18,8 @@
 #pragma once
 
 #include <kernel/thread/thread_state.h>
+
+#include <algorithm>
 #include <list>
 #include <set>
 
@@ -188,7 +190,7 @@ private:
 template <typename T>
 class PriorityThreadDataQueueInteratorBase : public ThreadDataQueueInteratorBase<T> {
 public:
-    PriorityThreadDataQueueInteratorBase(typename std::multiset<T, std::greater<T>>::iterator it)
+    PriorityThreadDataQueueInteratorBase(typename std::multiset<T, std::greater<>>::iterator it)
         : it(it) {
     }
 
@@ -261,7 +263,7 @@ public:
     }
 
 private:
-    ThreadDataQueueInterator<T> make_iterator(typename std::multiset<T, std::greater<T>>::iterator it) {
+    ThreadDataQueueInterator<T> make_iterator(typename std::multiset<T, std::greater<>>::iterator it) {
         auto base = new PriorityThreadDataQueueInteratorBase<T>(it);
         return ThreadDataQueueInterator<T>(base);
     }

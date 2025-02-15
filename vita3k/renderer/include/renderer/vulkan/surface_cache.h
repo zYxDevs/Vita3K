@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,8 +17,9 @@
 
 #pragma once
 
-#include <renderer/surface_cache.h>
-
+#include <gxm/types.h>
+#include <mem/ptr.h>
+#include <renderer/gxm_types.h>
 #include <util/containers.h>
 #include <vkutil/objects.h>
 
@@ -31,6 +32,7 @@ namespace renderer::vulkan {
 struct VKRenderTarget;
 struct VKState;
 struct Viewport;
+using CallbackRequestFunction = std::function<void()>;
 
 // used for in-shader texture viewport
 struct TextureViewport {
@@ -38,14 +40,17 @@ struct TextureViewport {
     std::pair<float, float> offset = { 0.0f, 0.0f };
 };
 
-struct SurfaceCacheInfo {
-    enum {
-        FLAG_DIRTY = 1 << 0,
-        FLAG_FREE = 1 << 1
-    };
+enum struct SurfaceTiling {
+    Linear,
+    Swizzled,
+    Tiled
+};
 
-    std::uint32_t flags = FLAG_FREE;
+struct SurfaceCacheInfo {
     vkutil::Image texture;
+    SurfaceTiling tiling;
+    // for d32s8 surfaces, this is the size of the depth part
+    uint32_t total_bytes;
 };
 
 struct Framebuffer {
@@ -74,8 +79,7 @@ struct ColorSurfaceCacheInfo : public SurfaceCacheInfo {
     uint16_t height;
     uint16_t original_width;
     uint16_t original_height;
-    uint16_t pixel_stride;
-    uint32_t total_bytes;
+    uint32_t stride_bytes;
     uint64_t last_frame_rendered;
 
     SceGxmColorBaseFormat format;
@@ -100,7 +104,7 @@ struct ColorSurfaceCacheInfo : public SurfaceCacheInfo {
     // pointer to decoder used for surface sync (if necessary)
     SwsContext *sws_context = nullptr;
 
-    ColorSurfaceCacheInfo() {}
+    ColorSurfaceCacheInfo() = default;
     ~ColorSurfaceCacheInfo();
 };
 
@@ -110,8 +114,8 @@ struct DepthSurfaceView {
     vkutil::Image stencil_view;
     // used so that we copy the depth stencil at most once per scene
     uint64_t scene_timestamp;
-    uint32_t width;
-    uint32_t height;
+    uint32_t delta_col;
+    uint32_t delta_row;
 };
 
 struct DepthStencilSurfaceCacheInfo : public SurfaceCacheInfo {
@@ -119,6 +123,8 @@ struct DepthStencilSurfaceCacheInfo : public SurfaceCacheInfo {
     // dimensions of the depth buffer in memory
     int32_t memory_width;
     int32_t memory_height;
+    // stride in samples
+    uint32_t stride_samples;
     SceGxmMultisampleMode multisample_mode;
 
     // used when reading from this depth stencil in a shader with texture viewport enabled
@@ -142,7 +148,7 @@ struct SurfaceRetrieveResult {
     vkutil::Image *base_image;
 };
 
-class VKSurfaceCache : public SurfaceCache {
+class VKSurfaceCache {
 private:
     VKState &state;
 
@@ -159,6 +165,12 @@ private:
     lru::Queue<DepthStencilSurfaceCacheInfo> ds_surface_queue;
 
     std::map<std::pair<vk::ImageView, vk::ImageView>, Framebuffer> framebuffer_array;
+
+    // used with check_for_surface
+    // contains the addresses of the surfaces that are the target
+    // of a transfer operation from a surface in the GPU in the current frame
+    // use a vector instead of a set because expect it to be always quite small
+    std::vector<Address> cpu_surfaces_changed;
 
     VKRenderTarget *target = nullptr;
     ColorSurfaceCacheInfo *last_written_surface = nullptr;
@@ -190,6 +202,13 @@ public:
     Framebuffer &retrieve_framebuffer_handle(MemState &mem, SceGxmColorSurface *color, SceGxmDepthStencilSurface *depth_stencil,
         vk::RenderPass standard_render_pass, vk::RenderPass interlock_render_pass, vk::ImageView &color_view, vk::ImageView &ds_view);
 
+    // Check if the address is one of a used surface
+    // If it is the case, this function returns true, moves the callback
+    // synchronize the surface back to the RAM then only call the callback
+    // if this call is used for a copy or similar operation set the changed address to the destination
+    // so that subsequent calls to check_for_surface with the target destination also get delayed
+    bool check_for_surface(MemState &mem, Address source_address, CallbackRequestFunction &callback, Address target_address);
+
     // If non-null, the return value must be sent as a PostSurfaceSyncRequest
     ColorSurfaceCacheInfo *perform_surface_sync();
 
@@ -204,8 +223,16 @@ public:
     // Viewport should already have its fields width and height filled
     vk::ImageView sourcing_color_surface_for_presentation(Ptr<const void> address, uint32_t pitch, Viewport &viewport);
 
+    // Dump an rgba8 frame with the given properties to the returned vector
+    // if this function fails, the vector will be empty
+    std::vector<uint32_t> dump_frame(Ptr<const void> address, uint32_t width, uint32_t height, uint32_t pitch);
+
     void set_render_target(VKRenderTarget *new_target) {
         target = new_target;
+    }
+
+    void clear_surfaces_changed() {
+        cpu_surfaces_changed.clear();
     }
 };
 } // namespace renderer::vulkan

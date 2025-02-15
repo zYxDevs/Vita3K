@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,11 +15,18 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-#include <cpu/read_arg.h>
-#include <cpu/vargs.h>
+#pragma once
 
-// Workaround for old Clang and GCC
-template <>
-module::vargs make_vargs(const LayoutArgsState &state) {
-    return module::vargs{ state };
-}
+#include <string>
+#include <util/fs.h>
+#include <util/types.h>
+#include <vector>
+
+struct Patch {
+    uint8_t seg;
+    uint32_t offset;
+    std::vector<uint8_t> values;
+};
+
+std::vector<Patch> get_patches(fs::path &path, const std::string &titleid);
+Patch parse_patch(const std::string &patch);

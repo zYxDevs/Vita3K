@@ -48,7 +48,6 @@
 // SDL,GL3W
 #include <SDL.h>
 #include <SDL_syswm.h>
-#include <glutil/gl.h>
 #include <renderer/state.h>
 
 // This is the main rendering function that you have to implement and provide to ImGui (via setting up 'RenderDrawListsFn' in the ImGuiIO structure)
@@ -124,7 +123,7 @@ void ImGui_ImplSdlGL3_RenderDrawData(ImGui_GLState &state) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Setup viewport, orthographic projection matrix
-    glViewport(0, 0, (GLsizei)fb_width, (GLsizei)fb_height);
+    glViewport(0, 0, fb_width, fb_height);
     const float ortho_projection[4][4] = {
         { 2.0f / io.DisplaySize.x, 0.0f, 0.0f, 0.0f },
         { 0.0f, 2.0f / -io.DisplaySize.y, 0.0f, 0.0f },
@@ -145,9 +144,9 @@ void ImGui_ImplSdlGL3_RenderDrawData(ImGui_GLState &state) {
     glEnableVertexAttribArray(state.attribute_position_location);
     glEnableVertexAttribArray(state.attribute_uv_location);
     glEnableVertexAttribArray(state.attribute_color_location);
-    glVertexAttribPointer(state.attribute_position_location, 2, GL_FLOAT, GL_FALSE, sizeof(ImDrawVert), (GLvoid *)IM_OFFSETOF(ImDrawVert, pos));
-    glVertexAttribPointer(state.attribute_uv_location, 2, GL_FLOAT, GL_FALSE, sizeof(ImDrawVert), (GLvoid *)IM_OFFSETOF(ImDrawVert, uv));
-    glVertexAttribPointer(state.attribute_color_location, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(ImDrawVert), (GLvoid *)IM_OFFSETOF(ImDrawVert, col));
+    glVertexAttribPointer(state.attribute_position_location, 2, GL_FLOAT, GL_FALSE, sizeof(ImDrawVert), (GLvoid *)offsetof(ImDrawVert, pos));
+    glVertexAttribPointer(state.attribute_uv_location, 2, GL_FLOAT, GL_FALSE, sizeof(ImDrawVert), (GLvoid *)offsetof(ImDrawVert, uv));
+    glVertexAttribPointer(state.attribute_color_location, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(ImDrawVert), (GLvoid *)offsetof(ImDrawVert, col));
 
     // Draw
     for (int n = 0; n < draw_data->CmdListsCount; n++) {
@@ -202,8 +201,8 @@ void ImGui_ImplSdlGL3_RenderDrawData(ImGui_GLState &state) {
     else
         glDisable(GL_SCISSOR_TEST);
     glPolygonMode(GL_FRONT_AND_BACK, (GLenum)last_polygon_mode[0]);
-    glViewport(last_viewport[0], last_viewport[1], (GLsizei)last_viewport[2], (GLsizei)last_viewport[3]);
-    glScissor(last_scissor_box[0], last_scissor_box[1], (GLsizei)last_scissor_box[2], (GLsizei)last_scissor_box[3]);
+    glViewport(last_viewport[0], last_viewport[1], last_viewport[2], last_viewport[3]);
+    glScissor(last_scissor_box[0], last_scissor_box[1], last_scissor_box[2], last_scissor_box[3]);
     glColorMask(last_color_mask[0], last_color_mask[1], last_color_mask[2], last_color_mask[3]);
 }
 
@@ -341,11 +340,6 @@ IMGUI_API ImGui_GLState *ImGui_ImplSdlGL3_Init(renderer::State *renderer, SDL_Wi
 }
 
 void ImGui_ImplSdlGL3_Shutdown(ImGui_GLState &state) {
-    // Destroy SDL mouse cursors
-    for (auto &mouse_cursor : state.mouse_cursors)
-        SDL_FreeCursor(mouse_cursor);
-    memset(state.mouse_cursors, 0, sizeof(state.mouse_cursors));
-
     // Destroy OpenGL objects
     ImGui_ImplSdlGL3_InvalidateDeviceObjects(state);
 }

@@ -59,6 +59,7 @@ set(SOURCE_LIST
 	SceHid/SceHid.cpp
 	SceHttp/SceHttp.cpp
 	SceIme/SceIme.cpp
+        SceIpmi/SceIpmi.cpp
 	SceIncomingDialog/SceIncomingDialog.cpp
 	SceIofilemgr/SceIofilemgr.cpp
 	SceJpeg/SceJpegUser.cpp
@@ -192,6 +193,7 @@ set(SOURCE_LIST
 	SceTouch/SceTouch.cpp
 	SceTriggerUtil/SceTriggerUtil.cpp
 	SceUdcd/SceUdcd.cpp
+	SceUlobjDbg/SceUlobjDbg.cpp
 	SceUlobjMgr/SceUlobjMgr.cpp
 	SceUlt/SceUlt.cpp
 	SceUsbd/SceUsbdForUser.cpp
@@ -210,6 +212,6 @@ set(SOURCE_LIST
 
 add_library(modules STATIC ${SOURCE_LIST})
 target_include_directories(modules PUBLIC include)
-target_link_libraries(modules PRIVATE audio codec ctrl dialog display gui gxm kernel mem motion net ngs np ssl packages renderer rtc sdl2 touch xxHash::xxhash)
+target_link_libraries(modules PRIVATE audio codec ctrl dialog display dlmalloc gui gxm kernel mem motion net ngs np ssl packages patch printf renderer rtc sdl2 touch xxHash::xxhash)
 target_link_libraries(modules PUBLIC module)
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCE_LIST})

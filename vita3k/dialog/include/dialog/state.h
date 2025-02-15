@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -39,7 +39,7 @@ struct ImeState {
     bool cancelable;
     uint16_t *result;
     char text[SCE_IME_DIALOG_MAX_TEXT_LENGTH];
-    uint32_t status;
+    int32_t status;
 };
 
 struct MsgState {

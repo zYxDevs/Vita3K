@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -41,13 +41,13 @@ COMMAND_SET_STATE(region_clip) {
     render_context->record.region_clip_mode = helper.pop<SceGxmRegionClipMode>();
 
     // see COMMAND_SET_STATE(viewport) for an explanation
-    float factor = 1.0f;
+    uint32_t factor = 1;
     const bool has_msaa = (render_context->current_render_target && render_context->current_render_target->multisample_mode);
     const bool has_downscale = render_context->record.color_surface.downscale;
     if (has_msaa && !has_downscale)
-        factor = 2.0;
+        factor = 2;
     else if (!has_msaa && has_downscale)
-        factor = 1.0;
+        factor = 1;
 
     const uint32_t xMin = helper.pop<uint32_t>() * factor;
     const uint32_t xMax = helper.pop<uint32_t>() * factor;
@@ -62,11 +62,11 @@ COMMAND_SET_STATE(region_clip) {
 
     switch (renderer.current_backend) {
     case Backend::OpenGL:
-        gl::sync_clipping(static_cast<gl::GLState &>(renderer), *reinterpret_cast<gl::GLContext *>(render_context));
+        gl::sync_clipping(static_cast<gl::GLState &>(renderer), *static_cast<gl::GLContext *>(render_context));
         break;
 
     case Backend::Vulkan:
-        vulkan::sync_clipping(*reinterpret_cast<vulkan::VKContext *>(render_context));
+        vulkan::sync_clipping(*static_cast<vulkan::VKContext *>(render_context));
         break;
 
     default:
@@ -155,9 +155,9 @@ COMMAND_SET_STATE(viewport) {
         const bool has_msaa = (render_context->current_render_target && render_context->current_render_target->multisample_mode);
         const bool has_downscale = render_context->record.color_surface.downscale;
         if (has_msaa && !has_downscale)
-            factor = 2.0;
+            factor = 2.0f;
         else if (!has_msaa && has_downscale)
-            factor = 1.0;
+            factor = 1.0f;
 
         const float xOffset = helper.pop<float>() * factor;
         const float yOffset = helper.pop<float>() * factor;
@@ -429,12 +429,12 @@ COMMAND_SET_STATE(texture) {
     switch (renderer.current_backend) {
     case Backend::OpenGL:
         gl::sync_texture(dynamic_cast<gl::GLState &>(renderer), *reinterpret_cast<gl::GLContext *>(render_context), mem, texture_index, texture,
-            config, title_id);
+            config);
         break;
 
     case Backend::Vulkan:
         vulkan::sync_texture(*reinterpret_cast<vulkan::VKContext *>(render_context), mem, texture_index, texture,
-            config, title_id);
+            config);
         break;
 
     default:
@@ -562,7 +562,7 @@ COMMAND(handle_set_state) {
 
     if (result != handlers.end()) {
         // LOG_TRACE("State set: {}", (int)gxm_state_to_set);
-        result->second(renderer, mem, config, helper, render_context, cache_path, title_id);
+        result->second(renderer, mem, config, helper, render_context);
     } else {
         LOG_ERROR("Unknown state set command {}", static_cast<uint16_t>(gxm_state_to_set));
     }

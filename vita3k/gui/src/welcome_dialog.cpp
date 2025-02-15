@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@
 #include <config/functions.h>
 
 #include <config/state.h>
+#include <dialog/state.h>
 #include <gui/functions.h>
 
 #include "private.h"
@@ -25,15 +26,20 @@
 namespace gui {
 
 void draw_welcome_dialog(GuiState &gui, EmuEnvState &emuenv) {
-    const ImVec2 display_size(emuenv.viewport_size.x, emuenv.viewport_size.y);
-    const auto RES_SCALE = ImVec2(display_size.x / emuenv.res_width_dpi_scale, display_size.y / emuenv.res_height_dpi_scale);
+    const ImVec2 display_size(emuenv.logical_viewport_size.x, emuenv.logical_viewport_size.y);
+    const auto RES_SCALE = ImVec2(emuenv.gui_scale.x, emuenv.gui_scale.y);
+    static const auto BUTTON_SIZE = ImVec2(120.f * emuenv.manual_dpi_scale, 0.f);
 
     auto &lang = gui.lang.welcome;
+    auto &common = emuenv.common_dialog.lang.common;
 
     ImGui::SetNextWindowPos(ImVec2(display_size.x / 2.f, display_size.y / 2.f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     ImGui::PushStyleColor(ImGuiCol_Text, GUI_COLOR_TEXT_MENUBAR);
-    ImGui::Begin(lang["title"].c_str(), &gui.help_menu.welcome_dialog, ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::Begin("##welcome", &gui.help_menu.welcome_dialog, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize);
     ImGui::SetWindowFontScale(RES_SCALE.x);
+    TextColoredCentered(GUI_COLOR_TEXT_TITLE, lang["title"].c_str());
+    ImGui::Spacing();
+    ImGui::Separator();
     ImGui::PopStyleColor();
     ImGui::Spacing();
     ImGui::TextColored(GUI_COLOR_TEXT, "%s", lang["vita3k"].c_str());
@@ -84,8 +90,10 @@ void draw_welcome_dialog(GuiState &gui, EmuEnvState &emuenv) {
     if (ImGui::Checkbox(lang["show_next_time"].c_str(), &emuenv.cfg.show_welcome))
         config::serialize_config(emuenv.cfg, emuenv.cfg.config_path);
     ImGui::Spacing();
-    if (ImGui::Button(lang["close"].c_str()))
+    ImGui::SetCursorPosX((ImGui::GetWindowSize().x / 2.f) - (BUTTON_SIZE.x / 2.f));
+    if (ImGui::Button(common["close"].c_str(), BUTTON_SIZE))
         gui.help_menu.welcome_dialog = false;
+
     ImGui::End();
 }
 

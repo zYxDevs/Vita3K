@@ -57,6 +57,7 @@
 		<an_error_occurred>Bir hata oluştu.
 Hata Kodu: {}</an_error_occurred>
 		<cancel>İptal</cancel>
+		<close>Kapat</close>
 		<delete>Sil</delete>
 		<file_corrupted>Dosya bozuk.</file_corrupted>
 		<no>Hayır</no>
@@ -338,9 +339,17 @@ Vita3K sisteminiz artık hazır!</completed_setup>
 		</system>
 		<network name="Ağ">
 		</network>
-		<close>Kapat</close>
 		<save>Kaydet</save>
 	</settings_dialog>
+
+	<sys_apps_title>
+		<browser>Tarayıcı</browser>
+		<internet_browser>İnternet Tarayıcısı</internet_browser>
+		<trophies>Kupalar</trophies>
+		<trophy_collection>Kupa Koleksiyonu</trophy_collection>
+		<settings>Ayarlar</settings>
+		<content_manager>İçerik Yöneticisi</content_manager>
+	</sys_apps_title>
 
 	<trophy_collection>
 		<details>Ayrıntılı Bilgi</details>
@@ -380,7 +389,8 @@ Devam etmek istediğinizden emin misiniz?</user_delete_warn>
 	<vita3k_update name="Vita3K Güncelleme">
  		<new_version_available>Vita3K yeni bir sürümü mevcut.</new_version_available>
 		<back>Geri</back>
- 		<cancel_update>Güncelleme işlemini iptal etmek istiyor musunuz?</cancel_update>
+ 		<cancel_update_resume>Güncelleme işlemini iptal etmek istiyor musunuz?
+İptal ederseniz, bir sonraki güncellemenizde Vita3K indirmeye kaldığı yerden devam eder.</cancel_update_resume>
 		<downloading>İndiriliyor...
 İndirme tamamlandığında, Vita3K otomatik olarak yeniden başlatılır ve yeni güncelleme kurulur.</downloading>
 		<not_complete_update>Güncelleme tamamlanamadı.</not_complete_update>
@@ -394,8 +404,4 @@ Devam etmek istediğinizden emin misiniz?</user_delete_warn>
 		<update>Güncelle</update>
 		<version>Sürüm {}</version>
 	</vita3k_update>
-
-	<welcome name="Welcome to Vita3K">
-		<close>Kapat</close>
-	</welcome>
 </lang>

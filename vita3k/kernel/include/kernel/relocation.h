@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,9 +17,8 @@
 
 #pragma once
 
-#include <mem/ptr.h>
+#include <mem/util.h>
 
-#include <cstddef>
 #include <map>
 
 struct MemState;
@@ -32,8 +31,8 @@ struct SegmentInfoForReloc {
 using SegmentInfosForReloc = std::map<uint16_t, SegmentInfoForReloc>;
 
 /**
- * \param alternate_reloc_format True when alternate format 1 should be used (it's used for var import relocations)
- * \param explicit_symval Used only if alternate_reloc_format is true, specifies the value to be written to the relocation target
+ * \param is_var_import True when alternate format 1 should be used (it's used for var import relocations)
+ * \param explicit_symval Used only if is_var_import is true, specifies the value to be written to the relocation target
  * \return True on success, false on error
  */
-bool relocate(const void *entries, uint32_t size, const SegmentInfosForReloc &segments, const MemState &mem, bool alternate_reloc_format = false, uint32_t explicit_symval = 0);
+bool relocate(const void *entries, uint32_t size, const SegmentInfosForReloc &segments, const MemState &mem, bool is_var_import = false, uint32_t explicit_symval = 0);

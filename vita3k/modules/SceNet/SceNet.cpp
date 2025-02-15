@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,7 +19,6 @@
 
 #include <cstdio>
 #include <kernel/state.h>
-#include <net/functions.h>
 #include <net/state.h>
 #include <net/types.h>
 #include <util/lock_and_find.h>
@@ -44,8 +43,8 @@ std::string to_debug_str<SceNetEpollControlFlag>(const MemState &mem, SceNetEpol
 }
 
 template <>
-std::string to_debug_str<SceNetProtocol>(const MemState &mem, SceNetProtocol protocol) {
-    switch (protocol) {
+std::string to_debug_str<SceNetProtocol>(const MemState &mem, SceNetProtocol type) {
+    switch (type) {
     case SCE_NET_IPPROTO_IP: return "SCE_NET_IPPROTO_IP";
     case SCE_NET_IPPROTO_ICMP: return "SCE_NET_IPPROTO_ICMP";
     case SCE_NET_IPPROTO_IGMP: return "SCE_NET_IPPROTO_IGMP";
@@ -53,24 +52,24 @@ std::string to_debug_str<SceNetProtocol>(const MemState &mem, SceNetProtocol pro
     case SCE_NET_IPPROTO_UDP: return "SCE_NET_IPPROTO_UDP";
     case SCE_NET_SOL_SOCKET: return "SCE_NET_SOL_SOCKET";
     }
-    return std::to_string(protocol);
+    return std::to_string(type);
 }
 
 template <>
-std::string to_debug_str<SceNetSocketType>(const MemState &mem, SceNetSocketType socketType) {
-    switch (socketType) {
+std::string to_debug_str<SceNetSocketType>(const MemState &mem, SceNetSocketType type) {
+    switch (type) {
     case SCE_NET_SOCK_STREAM: return "SCE_NET_SOCK_STREAM";
     case SCE_NET_SOCK_DGRAM: return "SCE_NET_SOCK_DGRAM";
     case SCE_NET_SOCK_RAW: return "SCE_NET_SOCK_RAW";
     case SCE_NET_SOCK_DGRAM_P2P: return "SCE_NET_SOCK_DGRAM_P2P";
     case SCE_NET_SOCK_STREAM_P2P: return "SCE_NET_SOCK_STREAM_P2P";
     }
-    return std::to_string(socketType);
+    return std::to_string(type);
 }
 
 template <>
-std::string to_debug_str<SceNetSocketOption>(const MemState &mem, SceNetSocketOption socketOption) {
-    switch (socketOption) {
+std::string to_debug_str<SceNetSocketOption>(const MemState &mem, SceNetSocketOption type) {
+    switch (type) {
     /* IP */
     case SCE_NET_IP_HDRINCL: return "SCE_NET_IP_HDRINCL or SCE_NET_TCP_MAXSEG";
     case SCE_NET_IP_TOS: return "SCE_NET_IP_TOS or SCE_NET_TCP_MSS_TO_ADVERTISE";
@@ -108,7 +107,7 @@ std::string to_debug_str<SceNetSocketOption>(const MemState &mem, SceNetSocketOp
     case SCE_NET_SO_TPPOLICY: return "SCE_NET_SO_TPPOLICY";
     case SCE_NET_SO_NAME: return "SCE_NET_SO_NAME";
     }
-    return std::to_string(socketOption);
+    return std::to_string(type);
 }
 
 EXPORT(int, sceNetAccept, int sid, SceNetSockaddr *addr, unsigned int *addrlen) {
@@ -255,7 +254,7 @@ EXPORT(int, sceNetEpollWaitCB) {
 EXPORT(Ptr<int>, sceNetErrnoLoc) {
     TRACY_FUNC(sceNetErrnoLoc);
     // TLS id was taken from disasm source
-    auto addr = emuenv.kernel.get_thread_tls_addr(emuenv.mem, thread_id, 0x40);
+    auto addr = emuenv.kernel.get_thread_tls_addr(emuenv.mem, thread_id, TLS_NET_ERRNO);
     return addr.cast<int>();
 }
 
@@ -291,7 +290,7 @@ EXPORT(int, sceNetGetMacAddress, SceNetEtherAddr *addr, int flags) {
     if (addr == nullptr) {
         return RET_ERROR(SCE_NET_EINVAL);
     }
-#ifdef WIN32
+#ifdef _WIN32
     IP_ADAPTER_INFO AdapterInfo[16];
     DWORD dwBufLen = sizeof(AdapterInfo);
     if (GetAdaptersInfo(AdapterInfo, &dwBufLen) != ERROR_SUCCESS) {
@@ -363,8 +362,8 @@ EXPORT(unsigned short int, sceNetHtons, unsigned short int n) {
 EXPORT(Ptr<const char>, sceNetInetNtop, int af, const void *src, Ptr<char> dst, unsigned int size) {
     TRACY_FUNC(sceNetInetNtop, af, src, dst, size);
     char *dst_ptr = dst.get(emuenv.mem);
-#ifdef WIN32
-    const char *res = InetNtop(af, const_cast<void *>(src), dst_ptr, size);
+#ifdef _WIN32
+    const char *res = InetNtop(af, src, dst_ptr, size);
 #else
     const char *res = inet_ntop(af, src, dst_ptr, size);
 #endif
@@ -377,7 +376,7 @@ EXPORT(Ptr<const char>, sceNetInetNtop, int af, const void *src, Ptr<char> dst, 
 
 EXPORT(int, sceNetInetPton, int af, const char *src, void *dst) {
     TRACY_FUNC(sceNetInetPton, af, src, dst);
-#ifdef WIN32
+#ifdef _WIN32
     int res = InetPton(af, src, dst);
 #else
     int res = inet_pton(af, src, dst);
@@ -396,7 +395,7 @@ EXPORT(int, sceNetInit, SceNetInitParam *param) {
     if (!param || !param->memory.address() || param->size < 0x4000 || param->flags != 0)
         return RET_ERROR(SCE_NET_ERROR_EINVAL);
 
-#ifdef WIN32
+#ifdef _WIN32
     WORD versionWanted = MAKEWORD(2, 2);
     WSADATA wsaData;
     WSAStartup(versionWanted, &wsaData);
@@ -589,7 +588,7 @@ EXPORT(int, sceNetTerm) {
     if (!emuenv.net.inited) {
         return RET_ERROR(SCE_NET_ERROR_ENOTINIT);
     }
-#ifdef WIN32
+#ifdef _WIN32
     WSACleanup();
 #endif
     emuenv.net.inited = false;

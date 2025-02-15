@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,18 +18,30 @@
 #pragma once
 
 #include <glutil/object_array.h>
-#include <renderer/surface_cache.h>
+#include <gxm/types.h>
+#include <mem/ptr.h>
+#include <renderer/gxm_types.h>
 
 #include <array>
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 #include <glad/gl.h>
 
 struct MemState;
 
-namespace renderer::gl {
+namespace renderer {
+struct State;
+
+namespace gl {
+
 struct GLRenderTarget;
+
+enum SurfaceTextureRetrievePurpose {
+    READING,
+    WRITING,
+};
 
 struct GLSurfaceCacheInfo {
     enum {
@@ -76,7 +88,7 @@ struct GLDepthStencilSurfaceCacheInfo : public GLSurfaceCacheInfo {
     std::int32_t height;
 };
 
-class GLSurfaceCache : public SurfaceCache {
+class GLSurfaceCache {
 private:
     static constexpr std::uint32_t MAX_CACHE_SIZE_PER_CONTAINER = 20;
 
@@ -116,6 +128,8 @@ public:
         target = new_target;
     }
 
-    GLuint sourcing_color_surface_for_presentation(Ptr<const void> address, uint32_t width, uint32_t height, const std::uint32_t pitch, float *uvs, const int res_multiplier, SceFVector2 &texture_size);
+    GLuint sourcing_color_surface_for_presentation(Ptr<const void> address, uint32_t width, uint32_t height, const std::uint32_t pitch, float *uvs, const float res_multiplier, SceFVector2 &texture_size);
+    std::vector<uint32_t> dump_frame(Ptr<const void> address, uint32_t width, uint32_t height, uint32_t pitch, float res_multiplier, bool support_get_texture_sub_image);
 };
-} // namespace renderer::gl
+} // namespace gl
+} // namespace renderer

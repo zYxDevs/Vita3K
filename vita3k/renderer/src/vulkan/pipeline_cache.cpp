@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -26,7 +26,6 @@
 #include <renderer/shaders.h>
 #include <shader/spirv_recompiler.h>
 
-#include <util/align.h>
 #include <util/fs.h>
 #include <util/log.h>
 
@@ -192,8 +191,16 @@ void PipelineCache::init() {
     {
         // look for rgb vertex attribute support
         // we need to look at each format because it is not the same for all usual 3-component formats (checked on AMD Radeon HD 7800)
-        std::array<vk::Format, 7> formats = { vk::Format::eR16G16B16Unorm, vk::Format::eR16G16B16Snorm, vk::Format::eR16G16B16Uscaled, vk::Format::eR16G16B16Sscaled,
-            vk::Format::eR16G16B16Uint, vk::Format::eR16G16B16Sint, vk::Format::eR16G16B16Sfloat };
+        // no need to test for 32-bit types, they are always supported
+        vk::Format formats[] = {
+            vk::Format::eR16G16B16Unorm, vk::Format::eR16G16B16Snorm,
+            vk::Format::eR16G16B16Uscaled, vk::Format::eR16G16B16Sscaled,
+            vk::Format::eR16G16B16Uint, vk::Format::eR16G16B16Sint,
+            vk::Format::eR16G16B16Sfloat,
+            vk::Format::eR8G8B8Unorm, vk::Format::eR8G8B8Snorm,
+            vk::Format::eR8G8B8Uscaled, vk::Format::eR8G8B8Sscaled,
+            vk::Format::eR8G8B8Uint, vk::Format::eR8G8B8Sint
+        };
         for (auto fmt : formats) {
             vk::FormatProperties rgb_property = state.physical_device.getFormatProperties(fmt);
             if (!(rgb_property.bufferFeatures & vk::FormatFeatureFlagBits::eVertexBuffer)) {
@@ -251,9 +258,8 @@ void PipelineCache::set_async_compilation(bool enable) {
 constexpr uint32_t pipeline_cache_magic = 0xBEEF4321;
 
 void PipelineCache::read_pipeline_cache() {
-    const auto shaders_path{ fs::path(state.cache_path) / "shaders" / state.title_id / state.self_name };
     const std::string pipeline_cache_name = fmt::format("pipeline-cache-vk{}.dat", shader::CURRENT_VERSION);
-    const fs::path path = shaders_path / pipeline_cache_name;
+    const fs::path path = state.shaders_path / pipeline_cache_name;
 
     fs::ifstream pipeline_cache_file(path, std::ios::in | std::ios::binary);
     if (!pipeline_cache_file.is_open())
@@ -314,16 +320,15 @@ void PipelineCache::save_pipeline_cache() {
         std::lock_guard<std::mutex> guard(shaders_mutex);
         shader_cache_copy = state.shaders_cache_hashs;
     }
-    renderer::save_shaders_cache_hashs(state, state.shaders_cache_hashs);
+    renderer::save_shaders_cache_hashs(state, shader_cache_copy);
 
     const std::vector<uint8_t> pipeline_data = state.device.getPipelineCacheData(pipeline_cache);
     if (pipeline_data.empty())
         // No pipeline was created
         return;
 
-    const auto shaders_path{ fs::path(state.cache_path) / "shaders" / state.title_id / state.self_name };
     const std::string pipeline_cache_name = fmt::format("pipeline-cache-vk{}.dat", shader::CURRENT_VERSION);
-    const fs::path path = shaders_path / pipeline_cache_name;
+    const fs::path path = state.shaders_path / pipeline_cache_name;
 
     fs::ofstream pipeline_cache_file(path, std::ios::out | std::ios::binary | std::ios::trunc);
     if (!pipeline_cache_file.is_open())
@@ -347,11 +352,42 @@ void PipelineCache::save_pipeline_cache() {
     LOG_INFO("Pipeline cache saved");
 }
 
-vk::PipelineShaderStageCreateInfo PipelineCache::retrieve_shader(const SceGxmProgram *program, const Sha256Hash &hash, bool is_vertex, bool maskupdate, MemState &mem, const shader::Hints &hints) {
+// Vulkan structs used to specify a specialization constant
+// Also, booleans in SPIRV are 32bit wide
+static const vk::SpecializationMapEntry srgb_entry = {
+    .constantID = shader::GAMMA_CORRECTION_SPECIALIZATION_ID,
+    .offset = 0,
+    .size = sizeof(uint32_t)
+};
+
+static const uint32_t srgb_entry_true = vk::True;
+static const uint32_t srgb_entry_false = vk::False;
+
+static const vk::SpecializationInfo srgb_info_true = {
+    .mapEntryCount = 1,
+    .pMapEntries = &srgb_entry,
+    .dataSize = sizeof(uint32_t),
+    .pData = &srgb_entry_true
+};
+
+static const vk::SpecializationInfo srgb_info_false = {
+    .mapEntryCount = 1,
+    .pMapEntries = &srgb_entry,
+    .dataSize = sizeof(uint32_t),
+    .pData = &srgb_entry_false
+};
+
+vk::PipelineShaderStageCreateInfo PipelineCache::retrieve_shader(const SceGxmProgram *program, const Sha256Hash &hash, bool is_vertex, bool maskupdate, MemState &mem, const shader::Hints &hints, bool is_srgb) {
     if (maskupdate)
         LOG_CRITICAL("Mask not implemented in the vulkan renderer!");
 
     const vk::ShaderModule shader_compiling = std::bit_cast<vk::ShaderModule>(~0ULL);
+
+    const vk::SpecializationInfo *spec_info = nullptr;
+    if (!is_vertex && state.features.should_use_shader_interlock() && program->is_frag_color_used()) {
+        // if the specialization constant is used in the shader
+        spec_info = is_srgb ? &srgb_info_true : &srgb_info_false;
+    }
 
     vk::ShaderModule *shader_module;
     {
@@ -381,20 +417,18 @@ vk::PipelineShaderStageCreateInfo PipelineCache::retrieve_shader(const SceGxmPro
         vk::PipelineShaderStageCreateInfo shader_stage_info{
             .stage = is_vertex ? vk::ShaderStageFlagBits::eVertex : vk::ShaderStageFlagBits::eFragment,
             .module = *shader_module,
-            .pName = is_vertex ? "main_vs" : "main_fs"
+            .pName = is_vertex ? "main_vs" : "main_fs",
+            .pSpecializationInfo = spec_info,
         };
         return shader_stage_info;
     }
 
-    const char *title_id = state.title_id;
-    const char *self_name = state.self_name;
-
     const std::string hash_text = hex_string(hash);
 
-    LOG_INFO("Generating vulkan spv shader {}", hash_text.data());
+    LOG_INFO("Generating vulkan spv shader {}", hash_text);
     const std::string shader_version = fmt::format("vk{}", shader::CURRENT_VERSION);
 
-    shader::usse::SpirvCode source = load_spirv_shader(*program, state.features, true, hints, maskupdate, state.cache_path.c_str(), title_id, self_name, shader_version, true);
+    shader::usse::SpirvCode source = load_spirv_shader(*program, state.features, true, hints, maskupdate, state.shaders_path, state.shaders_log_path, shader_version, true);
 
     vk::ShaderModuleCreateInfo shader_info{
         .codeSize = sizeof(uint32_t) * source.size(),
@@ -404,7 +438,7 @@ vk::PipelineShaderStageCreateInfo PipelineCache::retrieve_shader(const SceGxmPro
     *shader_module = state.device.createShaderModule(shader_info);
     {
         std::lock_guard<std::mutex> guard(shaders_mutex);
-        // Save shader cache haches
+        // Save shader cache hashes
         // vertex and fragment shaders are not linked together so no need to associate them
         Sha256Hash empty_hash{};
         if (is_vertex) {
@@ -417,7 +451,8 @@ vk::PipelineShaderStageCreateInfo PipelineCache::retrieve_shader(const SceGxmPro
     vk::PipelineShaderStageCreateInfo shader_stage_info{
         .stage = is_vertex ? vk::ShaderStageFlagBits::eVertex : vk::ShaderStageFlagBits::eFragment,
         .module = *shader_module,
-        .pName = is_vertex ? "main_vs" : "main_fs"
+        .pName = is_vertex ? "main_vs" : "main_fs",
+        .pSpecializationInfo = spec_info,
     };
 
     return shader_stage_info;
@@ -566,7 +601,7 @@ vk::PipelineVertexInputStateCreateInfo PipelineCache::get_vertex_input_state(con
 
         used_streams |= (1 << attribute.streamIndex);
 
-        const SceGxmAttributeFormat attribute_format = static_cast<SceGxmAttributeFormat>(attribute.format);
+        SceGxmAttributeFormat attribute_format = attribute.format;
         shader::usse::AttributeInformation info = vkvert->attribute_infos.at(attribute.regIndex);
 
         uint8_t component_count = attribute.componentCount;
@@ -577,21 +612,41 @@ vk::PipelineVertexInputStateCreateInfo PipelineCache::get_vertex_input_state(con
         uint32_t array_element_size = 0;
         vk::Format format;
         if (info.regformat) {
-            const int comp_size = gxm::attribute_format_size(attribute_format);
-            component_count = (comp_size * component_count + 3) / 4;
+            // use the data from the shader itself
+            component_count = info.component_count;
+            switch (info.gxm_type) {
+            case SCE_GXM_PARAMETER_TYPE_U8:
+            case SCE_GXM_PARAMETER_TYPE_S8:
+            case SCE_GXM_PARAMETER_TYPE_C10:
+                attribute_format = SCE_GXM_ATTRIBUTE_FORMAT_U8;
+                break;
+            case SCE_GXM_PARAMETER_TYPE_U16:
+            case SCE_GXM_PARAMETER_TYPE_S16:
+            case SCE_GXM_PARAMETER_TYPE_F16:
+                attribute_format = SCE_GXM_ATTRIBUTE_FORMAT_U16;
+                break;
+            default:
+                // U32 format
+                attribute_format = SCE_GXM_ATTRIBUTE_FORMAT_UNTYPED;
+                break;
+            }
+
+            if (info.gxm_type == SCE_GXM_PARAMETER_TYPE_C10)
+                // this is 10-bit and not 8-bit
+                component_count = (component_count * 10 + 7) / 8;
 
             if (component_count > 4) {
                 // a matrix is used as an attribute, pack everything into an array of vec4
                 array_size = (component_count + 3) / 4;
-                array_element_size = 4 * sizeof(int32_t);
+                array_element_size = 4 * gxm::attribute_format_size(attribute_format);
                 component_count = 4;
             }
 
             // regformat attributes are int32
-            format = translate_attribute_format(SCE_GXM_ATTRIBUTE_FORMAT_UNTYPED, component_count, true, true);
+            format = translate_attribute_format(attribute_format, component_count, true, false);
             if (component_count == 3 && unsupported_rgb_vertex_attribute_formats.contains(format)) {
                 component_count = 4;
-                format = translate_attribute_format(SCE_GXM_ATTRIBUTE_FORMAT_UNTYPED, component_count, true, true);
+                format = translate_attribute_format(attribute_format, component_count, true, false);
             }
         } else {
             // some AMD GPUs do not support rgb vertex attributes, so just put it as rgba
@@ -606,7 +661,7 @@ vk::PipelineVertexInputStateCreateInfo PipelineCache::get_vertex_input_state(con
 
         for (uint32_t i = 0; i < array_size; i++) {
             attr_descr.push_back(vk::VertexInputAttributeDescription{
-                .location = info.location() + i,
+                .location = info.location + i,
                 .binding = attribute.streamIndex,
                 .format = format,
                 .offset = attribute.offset + i * array_element_size });
@@ -675,8 +730,7 @@ static vk::StencilOpState convert_op_state(const GxmStencilStateOp &state) {
 }
 
 vk::Pipeline PipelineCache::compile_pipeline(SceGxmPrimitiveType type, vk::RenderPass render_pass, const SceGxmVertexProgram &vertex_program_gxm, const SceGxmFragmentProgram &fragment_program_gxm, const GxmRecordState &record, const shader::Hints &hints, MemState &mem) {
-    const VertexProgram &vertex_program = *reinterpret_cast<VertexProgram *>(
-        vertex_program_gxm.renderer_data.get());
+    const VertexProgram &vertex_program = *vertex_program_gxm.renderer_data;
     const SceGxmProgram *gxm_fragment_shader = fragment_program_gxm.program.get(mem);
     const VKFragmentProgram &fragment_program = *reinterpret_cast<VKFragmentProgram *>(
         fragment_program_gxm.renderer_data.get());
@@ -685,7 +739,7 @@ vk::Pipeline PipelineCache::compile_pipeline(SceGxmPrimitiveType type, vk::Rende
     const vk::PipelineVertexInputStateCreateInfo vertex_input = get_vertex_input_state(vertex_program_gxm, mem);
 
     const vk::PipelineShaderStageCreateInfo vertex_shader = retrieve_shader(vertex_program_gxm.program.get(mem), vertex_program.hash, true, fragment_program_gxm.is_maskupdate, mem, hints);
-    const vk::PipelineShaderStageCreateInfo fragment_shader = retrieve_shader(gxm_fragment_shader, fragment_program.hash, false, fragment_program_gxm.is_maskupdate, mem, hints);
+    const vk::PipelineShaderStageCreateInfo fragment_shader = retrieve_shader(gxm_fragment_shader, fragment_program.hash, false, fragment_program_gxm.is_maskupdate, mem, hints, record.is_gamma_corrected);
     const vk::PipelineShaderStageCreateInfo shader_stages[] = { vertex_shader, fragment_shader };
     // disable the fragment shader if gxm asks us to
     const bool is_fragment_disabled = record.front_side_fragment_program_mode == SCE_GXM_FRAGMENT_PROGRAM_DISABLED || gxm_fragment_shader->has_no_effect();
@@ -752,7 +806,7 @@ vk::Pipeline PipelineCache::compile_pipeline(SceGxmPrimitiveType type, vk::Rende
     vk::PipelineDynamicStateCreateInfo dynamic_info{};
     dynamic_info.setDynamicStates(dynamic_states);
 
-    // we still need to specifiy the viewport and scissor count even though they are dynamic
+    // we still need to specify the viewport and scissor count even though they are dynamic
     vk::PipelineViewportStateCreateInfo viewport{
         .viewportCount = 1,
         .scissorCount = 1
@@ -829,7 +883,8 @@ vk::Pipeline PipelineCache::retrieve_pipeline(VKContext &context, SceGxmPrimitiv
     context.shader_hints.color_format = record.color_surface.colorFormat;
     context.shader_hints.attributes = &vertex_program_gxm.attributes;
 
-    const bool compile_pipeline_async = !already_in_cache && consider_for_async && use_async_compilation && can_use_deferred_compilation;
+    // note: the flag can_use_deferred_compilation is not considered here because it causes way too many false positives
+    const bool compile_pipeline_async = !already_in_cache && consider_for_async && use_async_compilation;
 
     if (compile_pipeline_async) {
         // create the pipeline compile request
@@ -859,7 +914,8 @@ vk::Pipeline PipelineCache::retrieve_pipeline(VKContext &context, SceGxmPrimitiv
         const auto time_s = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
         next_pipeline_cache_save = time_s + pipeline_cache_save_delay;
 
-        state.shaders_count_compiled++;
+        if (!already_in_cache)
+            state.shaders_count_compiled++;
 
         it->second = result;
 
@@ -875,16 +931,13 @@ vk::ShaderModule PipelineCache::precompile_shader(const Sha256Hash &hash, bool s
             return it->second;
     }
 
-    const auto shader_path{ fs::path(state.cache_path) / "shaders" / state.title_id / state.self_name };
-
-    if (!fs::exists(shader_path) || fs::is_empty(shader_path))
+    if (!fs::exists(state.shaders_path) || fs::is_empty(state.shaders_path))
         return nullptr;
 
     Sha256Hash shader_hash;
     memcpy(shader_hash.data(), hash.data(), sizeof(Sha256Hash));
-    const std::string hash_ver = fmt::format("vk{}-{}", shader::CURRENT_VERSION, hex_string(shader_hash));
-
-    const std::vector<uint32_t> source = renderer::pre_load_shader_spirv(hash_ver.c_str(), "spv", state.cache_path.c_str(), state.title_id, state.self_name);
+    const std::string shader_file_name = fmt::format("vk{}-{}.spv", shader::CURRENT_VERSION, hex_string(shader_hash));
+    const std::vector<uint32_t> source = renderer::pre_load_shader_spirv(state.shaders_path / shader_file_name);
 
     if (source.empty())
         return nullptr;

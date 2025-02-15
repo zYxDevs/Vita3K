@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -25,7 +25,6 @@
 #include <shader/usse_translator_types.h>
 #include <util/log.h>
 
-#include <map>
 #include <optional>
 
 namespace shader::usse {
@@ -35,7 +34,7 @@ using USSEMatcher = shader::decoder::Matcher<Visitor, uint64_t>;
 
 template <typename V>
 static std::optional<const USSEMatcher<V>> DecodeUSSE(uint64_t instruction) {
-    static const std::array<USSEMatcher<V>, 34> table = {
+    static const std::array<USSEMatcher<V>, 35> table = {
 #define INST(fn, name, bitstring) shader::decoder::detail::detail<USSEMatcher<V>>::GetMatcher(fn, name, bitstring)
         // clang-format off
         // Vector multiply-add (Normal version)
@@ -744,6 +743,21 @@ static std::optional<const USSEMatcher<V>> DecodeUSSE(uint64_t instruction) {
                                                                                              ffffffff = src2_inc (8 bits)
         */
         INST(&V::smlsi, "SMLSI ()", "11111010--01-n--ttttppppssssdrcieeeeeeeeaaaaaaaabbbbbbbbffffffff"),
+        // SMBO control instruction
+        /*
+                                   11111 = op1
+                                        011 = op2
+                                           -- = don't care
+                                             01 = opcat
+                                               - = don't care
+                                                n = nosched (1 bit)
+                                                 -- = don't care
+                                                   dddddddddddd = dest_offset (12 bits)
+                                                               ssssssssssss = src0_offset (12 bits)
+                                                                           rrrrrrrrrrrr = src1_offset (12 bits)
+                                                                                       cccccccccccc = src2_offset (12 bits)
+        */
+        INST(&V::smbo, "SMBO ()", "11111011--01-n--ddddddddddddssssssssssssrrrrrrrrrrrrcccccccccccc"),
         // Kill program
         /*
                                    11111 = op1
@@ -1063,13 +1077,13 @@ void convert_gxp_usse_to_spirv(spv::Builder &b, const SceGxmProgram &program, co
     const uint64_t *secondary_program_start = program.secondary_program_start();
     const uint64_t *secondary_program_end = program.secondary_program_end();
 
-    std::map<ShaderPhase, std::pair<const std::uint64_t *, std::uint64_t>> shader_code;
+    std::array<std::pair<const std::uint64_t *, std::uint64_t>, (size_t)ShaderPhase::Max> shader_code;
 
     // Collect instructions of Pixel (primary) phase
-    shader_code[ShaderPhase::Pixel] = std::make_pair(primary_program, primary_program_instr_count);
+    shader_code[static_cast<size_t>(ShaderPhase::Pixel)] = std::make_pair(primary_program, primary_program_instr_count);
 
     // Collect instructions of Sample rate (secondary) phase
-    shader_code[ShaderPhase::SampleRate] = std::make_pair(secondary_program_start, secondary_program_end - secondary_program_start);
+    shader_code[static_cast<size_t>(ShaderPhase::SampleRate)] = std::make_pair(secondary_program_start, secondary_program_end - secondary_program_start);
 
     if (begin_hook_func)
         b.createFunctionCall(begin_hook_func, {});
@@ -1079,7 +1093,7 @@ void convert_gxp_usse_to_spirv(spv::Builder &b, const SceGxmProgram &program, co
     usse::USSERecompiler recomp(b, program, features, parameters, utils, end_hook_func, queries, render_info_id);
 
     for (uint32_t phase = 0; phase < static_cast<uint32_t>(ShaderPhase::Max); ++phase) {
-        const auto cur_phase_code = shader_code[(ShaderPhase)phase];
+        const auto cur_phase_code = shader_code[phase];
 
         if (cur_phase_code.second != 0) {
             if (static_cast<ShaderPhase>(phase) == ShaderPhase::SampleRate) {

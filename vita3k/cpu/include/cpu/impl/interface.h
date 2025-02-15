@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@
 #include <cpu/common.h>
 
 #include <cstdint>
-#include <memory>
 
 /*! \brief Base class for all CPU backend implementation */
 struct CPUInterface {
@@ -54,7 +53,7 @@ struct CPUInterface {
     virtual void set_fpscr(uint32_t val) = 0;
 
     virtual CPUContext save_context() = 0;
-    virtual void load_context(CPUContext context) = 0;
+    virtual void load_context(const CPUContext &ctx) = 0;
     virtual void invalidate_jit_cache(Address start, size_t length) = 0;
 
     virtual bool is_thumb_mode() = 0;

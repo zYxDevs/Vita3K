@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,21 +17,21 @@
 
 #pragma once
 
-#include <memory>
-
 #include <util/fs.h>
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <util/string_utils.h>
 #endif
 
 #include <dirent.h>
 
+#include <memory>
+
 typedef std::shared_ptr<FILE> FilePtr;
 
 // For opening Boost.Filesystem files, Boost returns wide strings for Windows, normal strings for other OS
 // Dirent and FILE only accept and return wide char strings for Windows, and normal for other OS
-#ifdef WIN32
+#ifdef _WIN32
 const wchar_t *translate_open_mode(const int flags);
 
 inline FilePtr create_shared_file(const fs::path &path, const int open_mode) {

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -30,16 +30,14 @@
 #include <string>
 #include <vector>
 
-namespace host {
-namespace dialog {
-namespace filesystem {
+namespace host::dialog::filesystem {
 
 /**
  * @brief Result IDs for filesystem-related dialogs
  */
 enum Result {
     /**
-     * @brief An error has ocurred
+     * @brief An error has occurred
      */
     ERROR,
 
@@ -87,7 +85,7 @@ struct FileFilter {
  * @param default_path Path to the folder the file browser dialog should show first when opened
  * @return Result code of the operation as specified in `host::dialog::filesystem::Result`
  */
-Result open_file(std::filesystem::path &resulting_path, std::vector<FileFilter> file_filters = {}, std::filesystem::path default_path = "");
+Result open_file(std::filesystem::path &resulting_path, const std::vector<FileFilter> &file_filters = {}, const std::filesystem::path &default_path = "");
 
 /**
  * @brief Open a native file browser dialog to request a directory path from the user
@@ -96,7 +94,7 @@ Result open_file(std::filesystem::path &resulting_path, std::vector<FileFilter> 
  * @param default_path Path to the folder the file browser dialog should show first when opened
  * @return Result code of the operation as specified in `host::dialog::filesystem::Result`
  */
-Result pick_folder(std::filesystem::path &resulting_path, std::filesystem::path default_path = "");
+Result pick_folder(std::filesystem::path &resulting_path, const std::filesystem::path &default_path = "");
 
 /**
  * @brief Get a string describing the last dialog error
@@ -105,8 +103,4 @@ Result pick_folder(std::filesystem::path &resulting_path, std::filesystem::path 
  */
 std::string get_error();
 
-} // namespace filesystem
-
-} // namespace dialog
-
-} // namespace host
+} // namespace host::dialog::filesystem

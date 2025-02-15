@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -399,7 +399,7 @@ EXPORT(SceInt32, _sceAppMgrLoadExec, const char *appPath, Ptr<char> const argv[]
 
     // Load exec executable
     vfs::FileBuffer exec_buffer;
-    if (vfs::read_app_file(exec_buffer, emuenv.pref_path.wstring(), emuenv.io.app_path, exec_path)) {
+    if (vfs::read_app_file(exec_buffer, emuenv.pref_path, emuenv.io.app_path, exec_path)) {
         if (argv && argv->get(emuenv.mem)) {
             size_t args = 0;
             emuenv.load_exec_argv = "\"";
@@ -445,9 +445,24 @@ EXPORT(int, _sceAppMgrLoopBackMount) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, _sceAppMgrMmsMount) {
-    TRACY_FUNC(_sceAppMgrMmsMount);
-    return UNIMPLEMENTED();
+EXPORT(SceInt32, _sceAppMgrMmsMount, SceInt32 id, char *mount_point) {
+    TRACY_FUNC(_sceAppMgrMmsMount, id, mount_point);
+    switch (id) {
+    case 0x190:
+        strcpy(mount_point, "ux0:mms/photo");
+        break;
+    case 0x191:
+        strcpy(mount_point, "ux0:mms/music");
+        break;
+    case 0x192:
+        strcpy(mount_point, "ux0:mms/video");
+        break;
+    default:
+        LOG_ERROR("Unknown id: {}", log_hex(id));
+        return RET_ERROR(SCE_APPMGR_ERROR_INVALID_PARAMETER);
+    }
+
+    return STUBBED("using strcpy");
 }
 
 EXPORT(int, _sceAppMgrOverwriteLaunchParamForShell) {

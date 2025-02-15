@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,13 +16,6 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 #include <shader/usse_translator.h>
-
-#include <SPIRV/GLSL.std.450.h>
-#include <SPIRV/SpvBuilder.h>
-
-#include <shader/usse_decoder_helpers.h>
-#include <shader/usse_disasm.h>
-#include <shader/usse_types.h>
 #include <util/log.h>
 
 bool shader::usse::USSETranslatorVisitor::illegal22() {

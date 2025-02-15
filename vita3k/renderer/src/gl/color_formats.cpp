@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,19 +15,17 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-#include <renderer/functions.h>
-#include <renderer/gl/functions.h>
+#include <glutil/gl.h>
+#include <gxm/types.h>
 
 #include <gxm/functions.h>
-#include <map>
 #include <util/log.h>
 
 namespace renderer::color {
 size_t bits_per_pixel(SceGxmColorBaseFormat base_format);
 }
 
-namespace renderer::gl {
-namespace color {
+namespace renderer::gl::color {
 
 static const GLint swizzle_abgr[4] = { GL_RED, GL_GREEN, GL_BLUE, GL_ALPHA };
 static const GLint swizzle_argb[4] = { GL_BLUE, GL_GREEN, GL_RED, GL_ALPHA };
@@ -102,6 +100,9 @@ static const GLint *translate_swizzle(SceGxmColorSwizzle1Mode mode) {
 // Translate popular color base format that can be bit-casted for purposes
 GLenum translate_internal_format(SceGxmColorBaseFormat base_format) {
     switch (base_format) {
+    case SCE_GXM_COLOR_BASE_FORMAT_U8U8U8:
+        return GL_RGB8;
+
     case SCE_GXM_COLOR_BASE_FORMAT_U8U8U8U8:
         return GL_RGBA8;
 
@@ -119,6 +120,9 @@ GLenum translate_internal_format(SceGxmColorBaseFormat base_format) {
 
     case SCE_GXM_COLOR_BASE_FORMAT_F32F32:
         return GL_RG32F;
+
+    case SCE_GXM_COLOR_BASE_FORMAT_F32:
+        return GL_R32F;
 
     case SCE_GXM_COLOR_BASE_FORMAT_F16:
         return GL_R16F;
@@ -151,8 +155,10 @@ GLenum translate_format(SceGxmColorBaseFormat base_format) {
         return GL_RG;
 
     case SCE_GXM_COLOR_BASE_FORMAT_F11F11F10:
+    case SCE_GXM_COLOR_BASE_FORMAT_U8U8U8:
         return GL_RGB;
 
+    case SCE_GXM_COLOR_BASE_FORMAT_F32:
     case SCE_GXM_COLOR_BASE_FORMAT_F16:
     case SCE_GXM_COLOR_BASE_FORMAT_U8:
         return GL_RED;
@@ -165,6 +171,7 @@ GLenum translate_type(SceGxmColorBaseFormat base_format) {
     switch (base_format) {
     case SCE_GXM_COLOR_BASE_FORMAT_U8:
     case SCE_GXM_COLOR_BASE_FORMAT_U8U8:
+    case SCE_GXM_COLOR_BASE_FORMAT_U8U8U8:
     case SCE_GXM_COLOR_BASE_FORMAT_U8U8U8U8:
         return GL_UNSIGNED_BYTE;
 
@@ -180,6 +187,7 @@ GLenum translate_type(SceGxmColorBaseFormat base_format) {
     case SCE_GXM_COLOR_BASE_FORMAT_F11F11F10:
         return GL_UNSIGNED_INT_10F_11F_11F_REV;
 
+    case SCE_GXM_COLOR_BASE_FORMAT_F32:
     case SCE_GXM_COLOR_BASE_FORMAT_F32F32:
         return GL_FLOAT;
 
@@ -205,6 +213,7 @@ const GLint *translate_swizzle(SceGxmColorFormat fmt) {
 
     case SCE_GXM_COLOR_BASE_FORMAT_SE5M9M9M9:
     case SCE_GXM_COLOR_BASE_FORMAT_U5U6U5:
+    case SCE_GXM_COLOR_BASE_FORMAT_U8U8U8:
     case SCE_GXM_COLOR_BASE_FORMAT_F11F11F10:
         return translate_swizzle(static_cast<SceGxmColorSwizzle3Mode>(swizzle));
 
@@ -214,6 +223,7 @@ const GLint *translate_swizzle(SceGxmColorFormat fmt) {
 
     case SCE_GXM_COLOR_BASE_FORMAT_U8:
     case SCE_GXM_COLOR_BASE_FORMAT_F16:
+    case SCE_GXM_COLOR_BASE_FORMAT_F32:
         return translate_swizzle(static_cast<SceGxmColorSwizzle1Mode>(swizzle));
 
     default:
@@ -234,9 +244,12 @@ size_t bytes_per_pixel_in_gl_storage(SceGxmColorBaseFormat base_format) {
     case SCE_GXM_COLOR_BASE_FORMAT_F16:
     case SCE_GXM_COLOR_BASE_FORMAT_U8U8:
         return 2;
+    case SCE_GXM_COLOR_BASE_FORMAT_U8U8U8:
+        return 3;
     case SCE_GXM_COLOR_BASE_FORMAT_U8U8U8U8:
     case SCE_GXM_COLOR_BASE_FORMAT_S8S8S8S8:
     case SCE_GXM_COLOR_BASE_FORMAT_U2U10U10U10:
+    case SCE_GXM_COLOR_BASE_FORMAT_F32:
         return 4;
     case SCE_GXM_COLOR_BASE_FORMAT_F16F16F16F16:
     case SCE_GXM_COLOR_BASE_FORMAT_F32F32:
@@ -291,5 +304,4 @@ GLenum get_raw_store_upload_data_type(SceGxmColorBaseFormat base_format) {
 
     return GL_RGBA_INTEGER;
 }
-} // namespace color
-} // namespace renderer::gl
+} // namespace renderer::gl::color

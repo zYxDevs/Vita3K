@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,24 +15,17 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-#include <cpu/functions.h>
-#include <cpu/impl/interface.h>
-
 #include <cpu/disasm/functions.h>
-#include <cpu/disasm/state.h>
+#include <cpu/functions.h>
+#include <cpu/impl/dynarmic_cpu.h>
+#include <cpu/impl/interface.h>
+#include <cpu/impl/unicorn_cpu.h>
+#include <cpu/state.h>
 #include <mem/ptr.h>
-#include <util/log.h>
 #include <util/types.h>
 
-#include <cpu/impl/dynarmic_cpu.h>
-#include <cpu/impl/unicorn_cpu.h>
-
-#include <cassert>
-#include <cpu/state.h>
-#include <cstring>
-
-#include <spdlog/fmt/fmt.h>
-#include <util/string_utils.h>
+#include <memory>
+#include <string>
 
 static void delete_cpu_state(CPUState *state) {
     delete state;
@@ -66,7 +59,7 @@ CPUStatePtr init_cpu(CPUBackend backend, bool cpu_opt, SceUID thread_id, std::si
 
     switch (backend) {
     case CPUBackend::Dynarmic: {
-        Dynarmic::ExclusiveMonitor *monitor = reinterpret_cast<Dynarmic::ExclusiveMonitor *>(protocol->get_exlusive_monitor());
+        Dynarmic::ExclusiveMonitor *monitor = static_cast<Dynarmic::ExclusiveMonitor *>(protocol->get_exclusive_monitor());
         state->cpu = std::make_unique<DynarmicCPU>(state.get(), processor_id, monitor, cpu_opt);
         break;
     }
@@ -209,7 +202,7 @@ CPUContext save_context(CPUState &state) {
     return state.cpu->save_context();
 }
 
-void load_context(CPUState &state, CPUContext ctx) {
+void load_context(CPUState &state, const CPUContext &ctx) {
     state.cpu->load_context(ctx);
 }
 

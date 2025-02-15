@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -36,7 +36,7 @@
 #pragma clang diagnostic pop
 #endif
 
-#include <string>
+#include <util/fs.h>
 
 namespace vkutil {
 
@@ -100,7 +100,7 @@ static constexpr vma::AllocationCreateInfo vma_host_visible = {
 vk::CommandBuffer create_single_time_command(vk::Device device, vk::CommandPool cmd_pool);
 void end_single_time_command(vk::Device device, vk::Queue queue, vk::CommandPool cmd_pool, vk::CommandBuffer cmd_buffer);
 
-vk::ShaderModule load_shader(vk::Device device, const std::string &path);
+vk::ShaderModule load_shader(vk::Device device, const fs::path &shader_path);
 vk::ShaderModule load_shader(vk::Device device, const void *data, const uint32_t size);
 
 void copy_buffer(vk::Device device, vk::CommandPool cmd_pool, vk::Queue queue, vk::Buffer src, vk::Buffer dst, vk::DeviceSize size);
@@ -114,7 +114,7 @@ enum struct ImageLayout {
     ColorAttachmentReadWrite,
     SampledImage,
     StorageImage,
-    DepthReadOnly
+    DepthStencilReadOnly
 };
 void transition_image_layout(vk::CommandBuffer cmd_buffer, vk::Image image, ImageLayout src_layout, ImageLayout dst_layout, const vk::ImageSubresourceRange &range = color_subresource_range);
 // transition image layout assuming you don't care about the former image content

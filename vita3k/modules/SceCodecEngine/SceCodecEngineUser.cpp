@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@
 #include <util/tracy.h>
 TRACY_MODULE_NAME(SceCodecEngineUser);
 
-enum SceCodecEngineErrorCode {
+enum SceCodecEngineErrorCode : uint32_t {
     SCE_CODECENGINE_ERROR_INVALID_POINTER = 0x80600000,
     SCE_CODECENGINE_ERROR_INVALID_SIZE = 0x80600001,
     SCE_CODECENGINE_ERROR_INVALID_HEAP = 0x80600005,

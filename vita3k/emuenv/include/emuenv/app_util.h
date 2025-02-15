@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,9 +19,6 @@
 
 #include <mem/ptr.h>
 #include <util/types.h>
-
-// forward declarations
-typedef uint32_t SceUInt32;
 
 typedef SceUInt32 SceAppUtilBootAttribute;
 typedef SceUInt32 SceAppUtilAppEventType;
@@ -154,7 +151,7 @@ enum SceAppUtilSaveDataSaveMode {
     SCE_APPUTIL_SAVEDATA_DATA_SAVE_MODE_DIRECTORY = 2
 };
 
-enum SceAppUtilErrorCode {
+enum SceAppUtilErrorCode : uint32_t {
     SCE_APPUTIL_ERROR_PARAMETER = 0x80100600,
     SCE_APPUTIL_ERROR_NOT_INITIALIZED = 0x80100601,
     SCE_APPUTIL_ERROR_NO_MEMORY = 0x80100602,

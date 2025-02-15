@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,7 +17,6 @@
 
 #include <shader/usse_translator.h>
 
-#include <SPIRV/GLSL.std.450.h>
 #include <SPIRV/SpvBuilder.h>
 
 #include <shader/usse_decoder_helpers.h>
@@ -338,7 +337,7 @@ bool USSETranslatorVisitor::i8mad(
 }
 
 bool USSETranslatorVisitor::i8mad2() {
-    LOG_DISASM("Unimplmenet Opcode: i8mad2");
+    LOG_DISASM("Unimplemented Opcode: i8mad2");
     return true;
 }
 

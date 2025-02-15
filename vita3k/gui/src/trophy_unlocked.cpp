@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -29,8 +29,8 @@ static constexpr int TROPHY_WINDOW_STATIC_FRAME_COUNT = 250;
 
 static void draw_trophy_unlocked(GuiState &gui, EmuEnvState &emuenv, NpTrophyUnlockCallbackData &callback_data) {
     const auto display_size = ImGui::GetIO().DisplaySize;
-    const auto RES_SCALE = ImVec2(display_size.x / emuenv.res_width_dpi_scale, display_size.y / emuenv.res_height_dpi_scale);
-    const auto SCALE = ImVec2(RES_SCALE.x * emuenv.dpi_scale, RES_SCALE.y * emuenv.dpi_scale);
+    const auto RES_SCALE = ImVec2(emuenv.gui_scale.x, emuenv.gui_scale.y);
+    const auto SCALE = ImVec2(RES_SCALE.x * emuenv.manual_dpi_scale, RES_SCALE.y * emuenv.manual_dpi_scale);
 
     const auto TROPHY_WINDOW_MARGIN_PADDING = 12.f * SCALE.x;
     const auto TROPHY_WINDOW_ICON_SIZE = 48.f * SCALE.x;
@@ -53,8 +53,7 @@ static void draw_trophy_unlocked(GuiState &gui, EmuEnvState &emuenv, NpTrophyUnl
             gui.trophy_window_pos = ImVec2(ImGui::GetIO().DisplaySize.x + TROPHY_WINDOW_MARGIN_PADDING, TROPHY_WINDOW_Y_POS);
 
             // Load icon
-            gui.trophy_window_icon = load_image(gui, (const char *)callback_data.icon_buf.data(),
-                static_cast<std::uint32_t>(callback_data.icon_buf.size()));
+            gui.trophy_window_icon = load_image(gui, callback_data.icon_buf.data(), static_cast<int>(callback_data.icon_buf.size()));
         } else if (gui.trophy_window_frame_stage == TrophyAnimationStage::SLIDE_IN && gui.trophy_window_pos.x > target_window_pos.x) {
             gui.trophy_window_pos.x -= TROPHY_MOVE_DELTA;
         } else if (gui.trophy_window_frame_stage == TrophyAnimationStage::SLIDE_OUT && gui.trophy_window_pos.x < target_window_pos.x) {
@@ -78,10 +77,10 @@ static void draw_trophy_unlocked(GuiState &gui, EmuEnvState &emuenv, NpTrophyUnl
     ImGui::Columns(2, nullptr, false);
     ImGui::SetColumnWidth(0, TROPHY_WINDOW_ICON_SIZE + TROPHY_WINDOW_MARGIN_PADDING * 2);
     ImGui::SetCursorPos(ImVec2(TROPHY_WINDOW_MARGIN_PADDING, TROPHY_ICON_MARGIN_PADDING));
-    ImGui::Image((ImTextureID)gui.trophy_window_icon, ImVec2(TROPHY_WINDOW_ICON_SIZE, TROPHY_WINDOW_ICON_SIZE));
+    ImGui::Image(gui.trophy_window_icon, ImVec2(TROPHY_WINDOW_ICON_SIZE, TROPHY_WINDOW_ICON_SIZE));
     ImGui::NextColumn();
 
-    auto common = gui.lang.common.main;
+    auto &common = gui.lang.common.main;
     std::string trophy_kind_s = "?";
 
     switch (callback_data.trophy_kind) {

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -24,7 +24,7 @@
 static void SDLCALL sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
     assert(userdata != nullptr);
     assert(stream != nullptr);
-    SDLAudioAdapter *adapter = reinterpret_cast<SDLAudioAdapter *>(userdata);
+    SDLAudioAdapter *adapter = static_cast<SDLAudioAdapter *>(userdata);
 
     adapter->audio_callback(stream, len);
 }

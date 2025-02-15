@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,7 +18,5 @@
 #pragma once
 
 #if defined(_MSC_VER)
-#define restrict __restrict
-#else
-#define restrict __restrict__
+#define __restrict__ __restrict
 #endif

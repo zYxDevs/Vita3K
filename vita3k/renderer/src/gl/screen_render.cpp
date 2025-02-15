@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,10 +15,8 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-#include <display/state.h>
-#include <mem/state.h>
+#include <glutil/shader.h>
 #include <renderer/gl/screen_render.h>
-
 #include <util/log.h>
 
 namespace renderer::gl {
@@ -32,8 +30,8 @@ bool ScreenRenderer::init(const fs::path &static_assets) {
     const auto render_main_path_frag = builtin_shaders_path / "render_main.frag";
     const auto render_main_path_fxaa_frag = builtin_shaders_path / "render_main_fxaa.frag";
 
-    m_render_shader_nofilter = ::gl::load_shaders(render_main_path_vert.string(), render_main_path_frag.string());
-    m_render_shader_fxaa = ::gl::load_shaders(render_main_path_vert.string(), render_main_path_fxaa_frag.string());
+    m_render_shader_nofilter = ::gl::load_shaders(render_main_path_vert, render_main_path_frag);
+    m_render_shader_fxaa = ::gl::load_shaders(render_main_path_vert, render_main_path_fxaa_frag);
     if (!m_render_shader_nofilter || !m_render_shader_fxaa) {
         LOG_CRITICAL("Couldn't compile essential shaders for rendering. Exiting");
         return false;
@@ -81,7 +79,7 @@ bool ScreenRenderer::init(const fs::path &static_assets) {
     glEnableVertexAttribArray(uvAttrib);
 
     glClearColor(0.125490203f, 0.698039234f, 0.666666687f, 1.0f);
-    glClearDepth(1.0f);
+    glClearDepth(1.0);
 
     return true;
 }
@@ -128,7 +126,7 @@ void ScreenRenderer::render(const SceFVector2 &viewport_pos, const SceFVector2 &
         static_cast<GLsizei>(viewport_size.y));
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClearDepth(1.0f);
+    glClearDepth(1.0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     // should not be needed, but just in case
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
@@ -236,7 +234,7 @@ void ScreenRenderer::render(const SceFVector2 &viewport_pos, const SceFVector2 &
     else
         glDisable(GL_SCISSOR_TEST);
     glPolygonMode(GL_FRONT_AND_BACK, (GLenum)last_polygon_mode[0]);
-    glViewport(last_viewport[0], last_viewport[1], (GLsizei)last_viewport[2], (GLsizei)last_viewport[3]);
+    glViewport(last_viewport[0], last_viewport[1], last_viewport[2], last_viewport[3]);
     glColorMask(last_color_mask[0], last_color_mask[1], last_color_mask[2], last_color_mask[3]);
 }
 

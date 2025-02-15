@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -26,7 +26,6 @@
 #include <cpu/functions.h>
 #include <dlmalloc.h>
 #include <io/functions.h>
-#include <kernel/load_self.h>
 #include <kernel/state.h>
 #include <kernel/sync_primitives.h>
 #include <packages/functions.h>
@@ -40,7 +39,6 @@
 #include <util/log.h>
 #include <util/tracy.h>
 
-#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 
@@ -330,7 +328,7 @@ EXPORT(int, sceClibSnprintf, char *dst, SceSize dst_max_size, const char *fmt, m
         return SCE_KERNEL_ERROR_INVALID_ARGUMENT;
     }
 
-    return SCE_KERNEL_OK;
+    return result;
 }
 
 EXPORT(int, sceClibSnprintfChk) {
@@ -383,7 +381,7 @@ EXPORT(int, sceClibStrlcpyChk) {
 
 EXPORT(int, sceClibStrncasecmp, const char *s1, const char *s2, SceSize len) {
     TRACY_FUNC(sceClibStrncasecmp, s1, s2, len);
-#ifdef WIN32
+#ifdef _WIN32
     return _strnicmp(s1, s2, len);
 #else
     return strncasecmp(s1, s2, len);
@@ -584,7 +582,7 @@ EXPORT(int, sceIoGetstatAsync) {
 
 EXPORT(int, sceIoGetstatByFd, const SceUID fd, SceIoStat *stat) {
     TRACY_FUNC(sceIoGetstatByFd, fd, stat);
-    return stat_file_by_fd(emuenv.io, fd, stat, emuenv.pref_path.wstring(), export_name);
+    return stat_file_by_fd(emuenv.io, fd, stat, emuenv.pref_path, export_name);
 }
 
 EXPORT(int, sceIoIoctl, SceUID fd, int cmd, const void *argp, SceSize arglen, void *bufp, SceSize buflen) {
@@ -630,7 +628,7 @@ EXPORT(SceUID, sceIoOpen, const char *file, const int flags, const SceMode mode)
         return RET_ERROR(SCE_ERROR_ERRNO_EINVAL);
     }
     LOG_INFO("Opening file: {}", file);
-    return open_file(emuenv.io, file, flags, emuenv.pref_path.wstring(), export_name);
+    return open_file(emuenv.io, file, flags, emuenv.pref_path, export_name);
 }
 
 EXPORT(int, sceIoOpenAsync) {
@@ -682,7 +680,7 @@ EXPORT(int, sceIoRemove, const char *path) {
     if (path == nullptr) {
         return RET_ERROR(SCE_ERROR_ERRNO_EINVAL);
     }
-    return remove_file(emuenv.io, path, emuenv.pref_path.wstring(), export_name);
+    return remove_file(emuenv.io, path, emuenv.pref_path, export_name);
 }
 
 EXPORT(int, sceIoRemoveAsync) {
@@ -696,7 +694,7 @@ EXPORT(int, sceIoRename, const char *oldname, const char *newname) {
         return RET_ERROR(SCE_ERROR_ERRNO_EINVAL);
 
     LOG_INFO("Renaming: {} to {}", oldname, newname);
-    return rename(emuenv.io, oldname, newname, emuenv.pref_path.wstring(), export_name);
+    return rename(emuenv.io, oldname, newname, emuenv.pref_path, export_name);
 }
 
 EXPORT(int, sceIoRenameAsync) {
@@ -709,7 +707,7 @@ EXPORT(int, sceIoRmdir, const char *path) {
     if (path == nullptr) {
         return RET_ERROR(SCE_ERROR_ERRNO_EINVAL);
     }
-    return remove_dir(emuenv.io, path, emuenv.pref_path.wstring(), export_name);
+    return remove_dir(emuenv.io, path, emuenv.pref_path, export_name);
 }
 
 EXPORT(int, sceIoRmdirAsync) {
@@ -1306,7 +1304,7 @@ EXPORT(SceInt32, sceKernelGetCondInfo, SceUID condId, Ptr<SceKernelCondInfo> pIn
 
 EXPORT(int, sceKernelGetCurrentThreadVfpException) {
     TRACY_FUNC(sceKernelGetCurrentThreadVfpException);
-    return UNIMPLEMENTED();
+    return emuenv.kernel.get_thread(thread_id)->tls.get_ptr<int>().get(emuenv.mem)[TLS_VFP_EXCEPTION];
 }
 
 EXPORT(SceInt32, sceKernelGetEventFlagInfo, SceUID evfId, Ptr<SceKernelEventFlagInfo> pInfo) {
@@ -1319,9 +1317,9 @@ EXPORT(int, sceKernelGetEventInfo) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceKernelGetEventPattern) {
-    TRACY_FUNC(sceKernelGetEventPattern);
-    return UNIMPLEMENTED();
+EXPORT(SceInt32, sceKernelGetEventPattern, SceUID event_id, SceUInt32 *get_pattern) {
+    TRACY_FUNC(sceKernelGetEventPattern, event_id, get_pattern);
+    return CALL_EXPORT(_sceKernelGetEventPattern, event_id, get_pattern);
 }
 
 EXPORT(int, sceKernelGetLwCondInfo) {
@@ -1525,7 +1523,7 @@ EXPORT(SceUID, sceKernelLoadModule, char *path, int flags, SceKernelLMOption *op
     return CALL_EXPORT(_sceKernelLoadModule, path, flags, option);
 }
 
-EXPORT(SceUID, sceKernelLoadStartModule, const char *moduleFileName, SceSize args, const Ptr<void> argp, SceUInt32 flags, const SceKernelLMOption *pOpt, int *pRes) {
+EXPORT(SceUID, sceKernelLoadStartModule, const char *moduleFileName, SceSize args, Ptr<const void> argp, SceUInt32 flags, const SceKernelLMOption *pOpt, int *pRes) {
     TRACY_FUNC(sceKernelLoadStartModule, moduleFileName, args, argp, flags, pOpt, pRes);
     return CALL_EXPORT(_sceKernelLoadStartModule, moduleFileName, args, argp, flags, pOpt, pRes);
 }
@@ -1718,24 +1716,24 @@ EXPORT(int, sceKernelStackChkFail) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceKernelStartModule, SceUID uid, SceSize args, const Ptr<void> argp, SceUInt32 flags, const Ptr<SceKernelStartModuleOpt> pOpt, int *pRes) {
+EXPORT(int, sceKernelStartModule, SceUID uid, SceSize args, Ptr<const void> argp, SceUInt32 flags, const SceKernelStartModuleOpt *pOpt, int *pRes) {
     TRACY_FUNC(sceKernelStartModule, uid, args, argp, flags, pOpt, pRes);
     return CALL_EXPORT(_sceKernelStartModule, uid, args, argp, flags, pOpt, pRes);
 }
 
-EXPORT(int, sceKernelStartThread, SceUID thid, SceSize arglen, Ptr<void> argp) {
+EXPORT(int, sceKernelStartThread, SceUID thid, SceSize arglen, const Ptr<void> argp) {
     TRACY_FUNC(sceKernelStartThread, thid, arglen, argp);
     return CALL_EXPORT(_sceKernelStartThread, thid, arglen, argp);
 }
 
-EXPORT(int, sceKernelStopModule) {
-    TRACY_FUNC(sceKernelStopModule);
-    return UNIMPLEMENTED();
+EXPORT(int, sceKernelStopModule, SceUID uid, SceSize args, Ptr<const void> argp, SceUInt32 flags, const SceKernelStopModuleOpt *pOpt, int *pRes) {
+    TRACY_FUNC(sceKernelStopModule, uid, args, argp, flags, pOpt, pRes);
+    return CALL_EXPORT(_sceKernelStopModule, uid, args, argp, flags, pOpt, pRes);
 }
 
-EXPORT(int, sceKernelStopUnloadModule) {
-    TRACY_FUNC(sceKernelStopUnloadModule);
-    return UNIMPLEMENTED();
+EXPORT(int, sceKernelStopUnloadModule, SceUID uid, SceSize args, Ptr<const void> argp, SceUInt32 flags, const void *pOpt, int *pRes) {
+    TRACY_FUNC(sceKernelStopUnloadModule, uid, args, argp, flags, pOpt, pRes);
+    return CALL_EXPORT(_sceKernelStopUnloadModule, uid, args, argp, flags, pOpt, pRes);
 }
 
 EXPORT(int, sceKernelTryLockLwMutex, Ptr<SceKernelLwMutexWork> workarea, int lock_count) {
@@ -1782,9 +1780,9 @@ EXPORT(int, sceKernelTrySendMsgPipeVector) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceKernelUnloadModule) {
-    TRACY_FUNC(sceKernelUnloadModule);
-    return UNIMPLEMENTED();
+EXPORT(int, sceKernelUnloadModule, SceUID uid, SceUInt32 flags, const void *pOpt) {
+    TRACY_FUNC(sceKernelUnloadModule, uid, flags, pOpt);
+    return CALL_EXPORT(_sceKernelUnloadModule, uid, flags, pOpt);
 }
 
 EXPORT(int, sceKernelUnlockLwMutex, Ptr<SceKernelLwMutexWork> workarea, int unlock_count) {

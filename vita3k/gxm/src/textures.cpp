@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,11 +15,12 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-#include <gxm/functions.h>
-#include <map>
+#include <gxm/types.h>
 #include <util/align.h>
 
-#include <assert.h>
+#include <bit>
+#include <cassert>
+#include <map>
 
 namespace gxm {
 uint32_t get_width(const SceGxmTexture &texture) {
@@ -296,7 +297,7 @@ uint32_t texture_size_full(const SceGxmTexture &texture) {
         break;
     default:
         break;
-    };
+    }
 
     uint32_t max_possible_mip = std::bit_width(std::min(width, height));
     if (type == SCE_GXM_TEXTURE_TILED) {
@@ -358,9 +359,9 @@ uint32_t texture_size_full(const SceGxmTexture &texture) {
         const bool twok_align_cond2 = width >= 16 && height >= 16 && (bpp == 16 || bpp == 32);
         const bool twok_align_cond3 = width >= 8 && height >= 8 && bpp == 64;
 
-        // if one of these conditions is true, alignement between faces is 2K
-        const uint32_t face_alignement = (twok_align_cond1 || twok_align_cond2 || twok_align_cond3) ? 2048 : 4;
-        const uint32_t face_full_size = align(texture_size, face_alignement);
+        // if one of these conditions is true, alignment between faces is 2K
+        const uint32_t face_alignment = (twok_align_cond1 || twok_align_cond2 || twok_align_cond3) ? 2048 : 4;
+        const uint32_t face_full_size = align(texture_size, face_alignment);
 
         // don't take into account what is after the end of the last texture
         texture_size = 5 * face_full_size + texture_size;
@@ -414,7 +415,7 @@ uint32_t texture_size_first_mip(const SceGxmTexture &texture) {
         break;
     default:
         break;
-    };
+    }
 
     auto [block_width, block_height] = get_block_size(format);
     width = align(width, block_width);

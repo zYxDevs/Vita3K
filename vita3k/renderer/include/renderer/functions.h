@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@
 struct MemState;
 struct FeatureState;
 struct Config;
+struct SDL_Window;
 
 namespace renderer {
 struct Context;
@@ -31,8 +32,8 @@ struct RenderTarget;
 struct State;
 struct VertexProgram;
 
-bool create(std::unique_ptr<FragmentProgram> &fp, State &state, const SceGxmProgram &program, const SceGxmBlendInfo *blend, GXPPtrMap &gxp_ptr_map, const char *cache_path, const char *title_id);
-bool create(std::unique_ptr<VertexProgram> &vp, State &state, const SceGxmProgram &program, GXPPtrMap &gxp_ptr_map, const std::vector<SceGxmVertexAttribute> &attributes, const char *cache_path, const char *title_id);
+bool create(std::unique_ptr<FragmentProgram> &fp, State &state, const SceGxmProgram &program, const SceGxmBlendInfo *blend, GXPPtrMap &gxp_ptr_map);
+bool create(std::unique_ptr<VertexProgram> &vp, State &state, const SceGxmProgram &program, GXPPtrMap &gxp_ptr_map, const std::vector<SceGxmVertexAttribute> &attributes);
 void create(SceGxmSyncObject *sync, State &state);
 void destroy(SceGxmSyncObject *sync, State &state);
 void finish(State &state, Context *context);
@@ -143,8 +144,6 @@ int send_single_command(State &state, Context *ctx, const CommandOpcode opcode, 
     else
         return 0;
 }
-
-class TextureCache;
 
 namespace texture {
 

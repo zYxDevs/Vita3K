@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -23,8 +23,8 @@
 #include <cpu/common.h>
 
 #include <cstdint>
-#include <functional>
-#include <stack>
+
+struct MemState;
 
 CPUStatePtr init_cpu(CPUBackend backend, bool cpu_opt, SceUID thread_id, std::size_t processor_id, MemState &mem, CPUProtocolBase *protocol);
 int run(CPUState &state);
@@ -46,7 +46,7 @@ void write_lr(CPUState &state, uint32_t value);
 void write_tpidruro(CPUState &state, uint32_t value);
 bool is_thumb_mode(CPUState &state);
 CPUContext save_context(CPUState &state);
-void load_context(CPUState &state, CPUContext ctx);
+void load_context(CPUState &state, const CPUContext &ctx);
 std::size_t get_processor_id(CPUState &state);
 void invalidate_jit_cache(CPUState &state, Address start, size_t length);
 

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@
 #include <cassert>
 #include <cstring>
 
-static void mix_out_port(uint8_t *stream, uint8_t *temp_buffer, int len, AudioOutPort &port, const ResumeAudioThread &resume_thread) {
+static void mix_out_port(uint8_t *stream, uint8_t *temp_buffer, int len, float global_volume, AudioOutPort &port, const ResumeAudioThread &resume_thread) {
     ZoneScopedC(0xF6C2FF); // Tracy - Track function scope with color thistle
 
     // How much data is available?
@@ -57,7 +57,7 @@ static void mix_out_port(uint8_t *stream, uint8_t *temp_buffer, int len, AudioOu
     const int bytes_got = SDL_AudioStreamGet(port.stream.get(), temp_buffer, bytes_to_get);
     lock.unlock();
     if (bytes_got > 0) {
-        SDL_MixAudioFormat(stream, temp_buffer, AUDIO_S16LSB, bytes_got, static_cast<int>(port.volume * SDL_MIX_MAXVOLUME));
+        SDL_MixAudioFormat(stream, temp_buffer, AUDIO_S16LSB, bytes_got, static_cast<int>(port.volume * global_volume * SDL_MIX_MAXVOLUME));
     }
 }
 
@@ -70,14 +70,14 @@ void AudioAdapter::audio_callback(uint8_t *stream, int len_bytes) {
         // Read from shared state.
         const std::lock_guard<std::mutex> lock(state.mutex);
         ports.reserve(state.out_ports.size());
-        for (const AudioOutPortPtrs::value_type &port : state.out_ports) {
-            ports.push_back(port.second);
+        for (const auto &[_, port] : state.out_ports) {
+            ports.push_back(port);
         }
     }
     std::memset(stream, state.spec.silence, len_bytes);
 
     for (const AudioOutPortPtr &port : ports) {
-        mix_out_port(stream, temp_buffer.data(), len_bytes, *port.get(), state.resume_thread);
+        mix_out_port(stream, temp_buffer.data(), len_bytes, state.global_volume, *port.get(), state.resume_thread);
     }
 
     FrameMarkNamed("Audio"); // Tracy - End discontinuous frame for audio rendering
@@ -127,7 +127,8 @@ AudioOutPortPtr AudioState::open_port(int nb_channels, int freq, int nb_sample) 
         if (!stream)
             return nullptr;
 
-        const AudioOutPortPtr port = std::make_shared<AudioOutPort>();
+        AudioOutPortPtr port = std::make_shared<AudioOutPort>();
+        port->len_microseconds = (nb_sample * 1'000'000ULL) / freq;
         port->len_bytes = nb_sample * nb_channels * sizeof(int16_t);
         port->stream = stream;
 
@@ -135,6 +136,7 @@ AudioOutPortPtr AudioState::open_port(int nb_channels, int freq, int nb_sample) 
     } else {
         // let the adapter open the port
         AudioOutPortPtr port = adapter->open_port(nb_channels, freq, nb_sample);
+        adapter->set_volume(*port, global_volume);
         return port;
     }
 }
@@ -144,6 +146,7 @@ void AudioState::audio_output(ThreadState &thread, AudioOutPort &out_port, const
         // Put audio to the port's stream and see how much is left to play.
         std::unique_lock<std::mutex> lock(out_port.mutex);
         SDL_AudioStreamPut(out_port.stream.get(), buffer, out_port.len_bytes);
+
         const int available = SDL_AudioStreamAvailable(out_port.stream.get());
         lock.unlock();
 
@@ -164,12 +167,42 @@ void AudioState::audio_output(ThreadState &thread, AudioOutPort &out_port, const
     } else {
         adapter->audio_output(thread, out_port, buffer);
     }
+
+    uint64_t now = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    uint64_t diff = now - out_port.last_output;
+    uint64_t to_wait = out_port.len_microseconds - diff;
+    if (diff < out_port.len_microseconds && to_wait > 1000) {
+        // This is what we should be waiting to be perfectly accurate
+        // However, doing so would cause the host audio buffer to often lack samples to output
+        // This is because the PS Vita and the host audio parameters do not match exactly
+        // So instead only wait 50% of the time
+        // also don't sleep for less than 0.5 ms
+        to_wait /= 2;
+        std::this_thread::sleep_for(std::chrono::microseconds(to_wait));
+        out_port.last_output = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    } else {
+        out_port.last_output = now;
+    }
 }
 
 void AudioState::set_volume(AudioOutPort &out_port, float volume) {
     out_port.volume = volume;
 
-    adapter->set_volume(out_port, volume);
+    if (!adapter->single_stream) {
+        adapter->set_volume(out_port, volume * global_volume);
+    }
+}
+
+void AudioState::set_global_volume(float volume) {
+    global_volume = volume;
+
+    if (!adapter->single_stream) {
+        // Update adapter volume for each port.
+        const std::lock_guard lock(mutex);
+        for (const auto &[_, port] : out_ports) {
+            adapter->set_volume(*port, port->volume * volume);
+        }
+    }
 }
 
 void AudioState::switch_state(const bool pause) {

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,10 +15,13 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-#include <module/module.h>
+#include <../SceError/SceError.h>
 
-EXPORT(int, sceErrorGetExternalString) {
-    return UNIMPLEMENTED();
+TRACY_MODULE_NAME(SceErrorUser);
+
+EXPORT(SceInt32, sceErrorGetExternalString, char *result, int err) {
+    TRACY_FUNC(sceErrorGetExternalString, result, err);
+    return CALL_EXPORT(_sceErrorGetExternalString, result, err);
 }
 
 EXPORT(int, sceErrorHistoryClearError) {

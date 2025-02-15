@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,21 +15,23 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+#include <array>
 #include <regex>
 #include <regmgr/functions.h>
 
 #include <util/bytes.h>
 #include <util/log.h>
 #include <util/string_utils.h>
+#include <util/vector_utils.h>
 
 namespace regmgr {
 
 constexpr std::array<unsigned char, 16> xorKey = { 0x89, 0xFA, 0x95, 0x48, 0xCB, 0x6D, 0x77, 0x9D, 0xA2, 0x25, 0x34, 0xFD, 0xA9, 0x35, 0x59, 0x6E };
 
-static std::string decryptRegistryFile(const fs::path reg_path) {
-    std::ifstream file(reg_path.string(), std::ios::binary);
+static std::string decryptRegistryFile(const fs::path &reg_path) {
+    fs::ifstream file(reg_path, std::ios::binary);
     if (!file.is_open()) {
-        LOG_WARN("Error while opening file: {}, install firmware for solve this!", reg_path.string());
+        LOG_WARN("Error while opening file: {}, install firmware for solve this!", reg_path);
         return {};
     }
 
@@ -38,7 +40,7 @@ static std::string decryptRegistryFile(const fs::path reg_path) {
 
     // Check if file is empty
     if (encryptedData.empty()) {
-        LOG_DEBUG("File is empty: {}", reg_path.string());
+        LOG_DEBUG("File is empty: {}", reg_path);
         return {};
     }
 
@@ -133,11 +135,6 @@ void init_reg_template(RegMgrState &regmgr, const std::string &reg) {
                             values.push_back(s);
                     }
 
-                    const auto add_category_template = [&](const std::string &category) {
-                        if (std::find(reg_category_template.begin(), reg_category_template.end(), category) == reg_category_template.end())
-                            reg_category_template.push_back(category);
-                    };
-
                     const auto valueType = static_cast<RegType>(string_utils::stoi_def(values[0]));
                     const auto valueSize = static_cast<uint32_t>(string_utils::stoi_def(values[1]));
                     const auto valueDefault = values.back();
@@ -167,11 +164,11 @@ void init_reg_template(RegMgrState &regmgr, const std::string &reg) {
                         for (int i = firstNum; i <= secondNum; i++) {
                             const std::string categoryName = fmt::format("{}{:0>2d}{}", cat_begin, i, cat_end);
                             reg_template[categoryName].push_back({ valueName, valueType, valueSize, initValueData });
-                            add_category_template(categoryName);
+                            vector_utils::push_if_not_exists(reg_category_template, categoryName);
                         }
                     } else {
                         reg_template[category].push_back({ valueName, valueType, valueSize, initValueData });
-                        add_category_template(category);
+                        vector_utils::push_if_not_exists(reg_category_template, category);
                     }
                 }
             }
@@ -358,7 +355,7 @@ void set_bin_value(RegMgrState &regmgr, const std::string &category, const std::
 
     std::lock_guard<std::mutex> lock(regmgr.mutex);
 
-    const char *data = reinterpret_cast<const char *>(buf);
+    const char *data = static_cast<const char *>(buf);
     regmgr.system_dreg[fix_category(category)][name].assign(data, data + bufSize);
 
     save_system_dreg(regmgr);
@@ -406,9 +403,9 @@ void set_str_value(RegMgrState &regmgr, const std::string &category, const std::
     save_system_dreg(regmgr);
 }
 
-void init_regmgr(RegMgrState &regmgr, const std::wstring &pref_path) {
+void init_regmgr(RegMgrState &regmgr, const fs::path &pref_path) {
     // Load the registry template
-    const auto reg = decryptRegistryFile(fs::path(pref_path) / "os0/kd/registry.db0");
+    const auto reg = decryptRegistryFile(pref_path / "os0/kd/registry.db0");
     if (reg.empty()) {
         return;
     }
@@ -417,7 +414,7 @@ void init_regmgr(RegMgrState &regmgr, const std::wstring &pref_path) {
     init_reg_template(regmgr, reg);
 
     // Initialize the system.dreg
-    regmgr.system_dreg_path = pref_path + L"vd0/registry/system.dreg";
+    regmgr.system_dreg_path = pref_path / "vd0/registry/system.dreg";
     regmgr.system_dreg.clear();
     if (!load_system_dreg(regmgr)) {
         LOG_WARN("Failed to load system.dreg, attempting to create it");

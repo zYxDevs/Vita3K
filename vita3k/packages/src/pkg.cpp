@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -23,95 +23,59 @@
 #include <F00DKeyEncryptorFactory.h>
 #include <PsvPfsParserConfig.h>
 #include <Utils.h>
+#include <openssl/evp.h>
 #include <rif2zrif.h>
 
-#include <crypto/aes.h>
-#include <io/device.h>
 #include <io/functions.h>
 
 #include <config/state.h>
 #include <emuenv/state.h>
 #include <packages/functions.h>
+#include <packages/license.h>
 #include <packages/pkg.h>
 #include <packages/sce_types.h>
 #include <packages/sfo.h>
 
 #include <util/bytes.h>
 #include <util/log.h>
-#include <util/string_utils.h>
 
 // Credits to mmozeiko https://github.com/mmozeiko/pkg2zip
 
-static void ctr_add(uint8_t *counter, uint64_t n) {
+static void ctr_init(uint8_t *counter, uint8_t *iv, uint64_t n) {
     for (int i = 15; i >= 0; i--) {
-        n = n + counter[i];
+        n = n + iv[i];
         counter[i] = (uint8_t)n;
         n >>= 8;
     }
 }
 
-static void aes128_ctr_xor(aes_context *ctx, const uint8_t *iv, uint64_t block, uint8_t *input, size_t size) {
-    uint8_t tmp[16];
-    uint8_t counter[16];
-    for (uint32_t i = 0; i < 16; i++) {
-        counter[i] = iv[i];
-    }
-    ctr_add(counter, block);
-
-    while (size >= 16) {
-        aes_crypt_ecb(ctx, AES_ENCRYPT, counter, tmp);
-        for (uint32_t i = 0; i < 16; i++) {
-            *input++ ^= tmp[i];
-        }
-        ctr_add(counter, 1);
-        size -= 16;
-    }
-
-    if (size != 0) {
-        aes_crypt_ecb(ctx, AES_ENCRYPT, counter, tmp);
-        for (size_t i = 0; i < size; i++) {
-            *input++ ^= tmp[i];
-        }
-    }
+int execute(std::string &zrif, fs::path &title_src, fs::path &title_dst, F00DEncryptorTypes type, std::string &f00d_arg) {
+    std::string title_src_str = title_src.string();
+    std::string title_dst_str = title_dst.string();
+    return execute(zrif, title_src_str, title_dst_str, type, f00d_arg);
 }
 
-bool decrypt_install_nonpdrm(EmuEnvState &emuenv, std::string &drmlicpath, const std::string &title_path) {
-    std::string title_id_src = title_path;
-    std::string title_id_dst = title_path + "_dec";
-    fs::ifstream binfile(string_utils::utf_to_wide(drmlicpath), std::ios::in | std::ios::binary | std::ios::ate);
+bool decrypt_install_nonpdrm(EmuEnvState &emuenv, const fs::path &drmlicpath, const fs::path &title_path) {
+    fs::path title_id_src = title_path;
+    fs::path title_id_dst = fs_utils::path_concat(title_path, "_dec");
+    fs::ifstream binfile(drmlicpath, std::ios::in | std::ios::binary | std::ios::ate);
     std::string zRIF = rif2zrif(binfile);
     F00DEncryptorTypes f00d_enc_type = F00DEncryptorTypes::native;
     std::string f00d_arg = std::string();
 
-    if ((execute(zRIF, title_id_src, title_id_dst, f00d_enc_type, f00d_arg) < 0) && (title_path.find("theme") == std::string::npos))
+    if ((execute(zRIF, title_id_src, title_id_dst, f00d_enc_type, f00d_arg) < 0) && (title_path.string().find("theme") == std::string::npos))
         return false;
 
     if (emuenv.app_info.app_category.find("gp") == std::string::npos)
         copy_license(emuenv, drmlicpath);
 
-    fs::remove_all(fs::path(title_id_src));
-    fs::rename(fs::path(title_id_dst), fs::path(title_id_src));
-
-    KeyStore SCE_KEYS;
-    register_keys(SCE_KEYS, 1);
-    std::vector<uint8_t> temp_klicensee = get_temp_klicensee(zRIF);
-
-    for (const auto &file : fs::recursive_directory_iterator(title_id_src)) {
-        if ((file.path().extension() == ".suprx") || (file.path().extension() == ".self") || (file.path().filename() == "eboot.bin")) {
-            uint64_t authid = 0x2F00000000000001ULL;
-            self2elf(file.path().string(), file.path().string() + "elf", SCE_KEYS, temp_klicensee.data(), &authid);
-            fs::rename(file.path().string() + "elf", file.path().string());
-            make_fself(file.path().string(), file.path().string() + "fself", authid);
-            fs::rename(file.path().string() + "fself", file.path().string());
-            LOG_INFO("Decrypted {} with klicensee {}", file.path().string(), byte_array_to_string(temp_klicensee.data(), 16));
-        }
-    }
+    fs::remove_all(title_id_src);
+    fs::rename(title_id_dst, title_id_src);
 
     return true;
 }
 
-bool install_pkg(const std::string &pkg, EmuEnvState &emuenv, std::string &p_zRIF, const std::function<void(float)> &progress_callback) {
-    std::wstring pkg_path = string_utils::utf_to_wide(pkg);
+bool install_pkg(const fs::path &pkg_path, EmuEnvState &emuenv, std::string &p_zRIF, const std::function<void(float)> &progress_callback) {
     fs::ifstream infile(pkg_path, std::ios::binary);
     PkgHeader pkg_header;
     PkgExtHeader ext_header;
@@ -187,21 +151,18 @@ bool install_pkg(const std::string &pkg, EmuEnvState &emuenv, std::string &p_zRI
     }
 
     auto key_type = byte_swap(ext_header.data_type2) & 7;
-    aes_context aes_ctx;
-    uint8_t main_key[16];
 
+    uint8_t main_key[16];
+    const uint8_t *pkg_vita_key = nullptr;
     switch (key_type) {
     case 2:
-        aes_setkey_enc(&aes_ctx, pkg_vita_2, 128);
-        aes_crypt_ecb(&aes_ctx, AES_ENCRYPT, pkg_header.pkg_data_iv, main_key);
+        pkg_vita_key = pkg_vita_2;
         break;
     case 3:
-        aes_setkey_enc(&aes_ctx, pkg_vita_3, 128);
-        aes_crypt_ecb(&aes_ctx, AES_ENCRYPT, pkg_header.pkg_data_iv, main_key);
+        pkg_vita_key = pkg_vita_3;
         break;
     case 4:
-        aes_setkey_enc(&aes_ctx, pkg_vita_4, 128);
-        aes_crypt_ecb(&aes_ctx, AES_ENCRYPT, pkg_header.pkg_data_iv, main_key);
+        pkg_vita_key = pkg_vita_4;
         break;
     default:
         LOG_ERROR("Unknown encryption key");
@@ -209,7 +170,22 @@ bool install_pkg(const std::string &pkg, EmuEnvState &emuenv, std::string &p_zRI
         break;
     }
 
-    aes_setkey_enc(&aes_ctx, main_key, 128);
+    EVP_CIPHER_CTX *cipher_ctx = EVP_CIPHER_CTX_new();
+    EVP_CIPHER *cipher_CTR = EVP_CIPHER_fetch(nullptr, "AES-128-CTR", nullptr);
+    EVP_CIPHER *cipher_ECB = EVP_CIPHER_fetch(nullptr, "AES-128-ECB", nullptr);
+    int dec_len = 0;
+
+    auto evp_cleanup = [&]() {
+        EVP_CIPHER_CTX_free(cipher_ctx);
+        EVP_CIPHER_free(cipher_CTR);
+        EVP_CIPHER_free(cipher_ECB);
+    };
+
+    // get the main key
+    EVP_EncryptInit_ex(cipher_ctx, cipher_ECB, nullptr, pkg_vita_key, nullptr);
+    EVP_CIPHER_CTX_set_padding(cipher_ctx, 0);
+    EVP_EncryptUpdate(cipher_ctx, main_key, &dec_len, pkg_header.pkg_data_iv, 0x10);
+    EVP_EncryptFinal_ex(cipher_ctx, main_key + dec_len, &dec_len);
 
     std::vector<uint8_t> sfo_buffer(sfo_size);
     SfoFile sfo_file;
@@ -249,15 +225,26 @@ bool install_pkg(const std::string &pkg, EmuEnvState &emuenv, std::string &p_zRI
         break;
     }
 
+    auto decrypt_aes_ctr = [&](uint32_t offset, unsigned char *data, size_t size) {
+        uint8_t counter[0x10];
+        ctr_init(counter, pkg_header.pkg_data_iv, offset);
+        EVP_DecryptInit_ex(cipher_ctx, cipher_CTR, nullptr, main_key, counter);
+        EVP_CIPHER_CTX_set_padding(cipher_ctx, 0);
+        EVP_DecryptUpdate(cipher_ctx, data, &dec_len, data, size);
+        EVP_DecryptFinal_ex(cipher_ctx, data + dec_len, &dec_len);
+    };
+
     for (uint32_t i = 0; i < byte_swap(pkg_header.file_count); i++) {
         PkgEntry entry;
         uint64_t file_offset = items_offset + i * 32;
         infile.seekg(byte_swap(pkg_header.data_offset) + file_offset, std::ios_base::beg);
         infile.read(reinterpret_cast<char *>(&entry), sizeof(PkgEntry));
-        aes128_ctr_xor(&aes_ctx, pkg_header.pkg_data_iv, file_offset / 16, reinterpret_cast<unsigned char *>(&entry), sizeof(PkgEntry));
+
+        decrypt_aes_ctr(file_offset / 16, reinterpret_cast<unsigned char *>(&entry), sizeof(PkgEntry));
 
         if (fs::file_size(pkg_path) < byte_swap(pkg_header.data_offset) + byte_swap(entry.name_offset) + byte_swap(entry.name_size) || fs::file_size(pkg_path) < byte_swap(pkg_header.data_offset) + byte_swap(entry.data_offset) + byte_swap(entry.data_size)) {
             LOG_ERROR("The pkg file size is too small, possibly corrupted");
+            evp_cleanup();
             return false;
         }
         const auto file_count = (float)byte_swap(pkg_header.file_count);
@@ -265,37 +252,48 @@ bool install_pkg(const std::string &pkg, EmuEnvState &emuenv, std::string &p_zRI
         std::vector<unsigned char> name(byte_swap(entry.name_size));
         infile.seekg(byte_swap(pkg_header.data_offset) + byte_swap(entry.name_offset));
         infile.read((char *)&name[0], byte_swap(entry.name_size));
-        aes128_ctr_xor(&aes_ctx, pkg_header.pkg_data_iv, byte_swap(entry.name_offset) / 16, &name[0], byte_swap(entry.name_size));
+
+        decrypt_aes_ctr(byte_swap(entry.name_offset) / 16, name.data(), byte_swap(entry.name_size));
 
         auto string_name = std::string(name.begin(), name.end());
         LOG_INFO(string_name);
 
         if ((byte_swap(entry.type) & 0xFF) == 4 || (byte_swap(entry.type) & 0xFF) == 18) { // Directory
-            fs::create_directories(path.string() + "/" + string_name);
+            fs::create_directories(path / string_name);
         } else { // File
-            std::ofstream outfile(path.string() + "/" + string_name, std::ios::binary);
+            fs::ofstream outfile(path / string_name, std::ios::binary);
 
             auto offset = byte_swap(entry.data_offset);
             auto data_size = byte_swap(entry.data_size);
+
+            uint8_t counter[0x10];
+            ctr_init(counter, pkg_header.pkg_data_iv, offset / 16);
+            EVP_DecryptInit_ex(cipher_ctx, cipher_CTR, nullptr, main_key, counter);
+            EVP_CIPHER_CTX_set_padding(cipher_ctx, 0);
+
+            std::vector<uint8_t> buffer(0x10000);
             while (data_size != 0) {
-                unsigned char buffer[0x10000];
-                auto size = data_size < sizeof(buffer) ? data_size : sizeof(buffer);
+                int size = data_size < buffer.size() ? data_size : buffer.size();
                 infile.seekg(byte_swap(pkg_header.data_offset) + offset);
-                infile.read((char *)buffer, size);
+                infile.read(reinterpret_cast<char *>(buffer.data()), size);
 
-                aes128_ctr_xor(&aes_ctx, pkg_header.pkg_data_iv, offset / 16, buffer, size);
+                EVP_DecryptUpdate(cipher_ctx, buffer.data(), &dec_len, buffer.data(), size);
 
-                outfile.write((char *)buffer, size);
+                outfile.write(reinterpret_cast<char *>(buffer.data()), dec_len);
                 offset += size;
                 data_size -= size;
             }
+
+            EVP_DecryptFinal_ex(cipher_ctx, buffer.data(), &dec_len);
+            outfile.write(reinterpret_cast<char *>(buffer.data()), dec_len);
             outfile.close();
         }
     }
     infile.close();
 
-    std::string title_id_src = path.string();
-    std::string title_id_dst = path.string() + "_dec";
+    evp_cleanup();
+    fs::path title_id_src = path;
+    fs::path title_id_dst = fs_utils::path_concat(path, "_dec");
     std::string zRIF = p_zRIF;
     F00DEncryptorTypes f00d_enc_type = F00DEncryptorTypes::native;
     std::string f00d_arg = std::string();
@@ -312,23 +310,17 @@ bool install_pkg(const std::string &pkg, EmuEnvState &emuenv, std::string &p_zRI
         if (execute(zRIF, title_id_src, title_id_dst, f00d_enc_type, f00d_arg) < 0) {
             return false;
         }
-        fs::remove_all(fs::path(title_id_src));
-        fs::rename(fs::path(title_id_dst), fs::path(title_id_src));
+        fs::remove_all(title_id_src);
+        fs::rename(title_id_dst, title_id_src);
 
-        for (const auto &file : fs::recursive_directory_iterator(title_id_src)) {
-            if (is_self(file.path())) {
-                decrypt_fself(file.path(), SCE_KEYS, temp_klicensee.data());
-                LOG_INFO("Decrypted {} with klicensee {}", file.path().string(), byte_array_to_string(temp_klicensee.data(), 16));
-            }
-        }
         break;
     case PkgType::PKG_TYPE_VITA_DLC:
 
         if (execute(zRIF, title_id_src, title_id_dst, f00d_enc_type, f00d_arg) < 0) {
             return false;
         } else {
-            fs::remove_all(fs::path(title_id_src));
-            fs::rename(fs::path(title_id_dst), fs::path(title_id_src));
+            fs::remove_all(title_id_src);
+            fs::rename(title_id_dst, title_id_src);
             return true;
         }
         break;
@@ -337,13 +329,13 @@ bool install_pkg(const std::string &pkg, EmuEnvState &emuenv, std::string &p_zRI
 
         // Theme don't have keystone file, need skip error
         execute(zRIF, title_id_src, title_id_dst, f00d_enc_type, f00d_arg);
-        fs::remove_all(fs::path(title_id_src));
-        fs::rename(fs::path(title_id_dst), fs::path(title_id_src));
+        fs::remove_all(title_id_src);
+        fs::rename(title_id_dst, title_id_src);
         return true;
         break;
     }
 
-    if (!copy_path(title_id_src, emuenv.pref_path.wstring(), emuenv.app_info.app_title_id, emuenv.app_info.app_category))
+    if (!copy_path(title_id_src, emuenv.pref_path, emuenv.app_info.app_title_id, emuenv.app_info.app_category))
         return false;
 
     create_license(emuenv, zRIF);

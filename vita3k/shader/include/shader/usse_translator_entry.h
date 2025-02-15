@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -32,8 +32,7 @@ class Builder;
 class Function;
 } // namespace spv
 
-namespace shader {
-namespace usse {
+namespace shader::usse {
 struct SpirvShaderParameters;
 struct NonDependentTextureQueryCallInfo;
 
@@ -46,5 +45,4 @@ using NonDependentTextureQueryCallInfos = std::vector<NonDependentTextureQueryCa
 void convert_gxp_usse_to_spirv(spv::Builder &b, const SceGxmProgram &program, const FeatureState &features, const SpirvShaderParameters &parameters, utils::SpirvUtilFunctions &utils,
     spv::Function *begin_hook_func, spv::Function *end_hook_func, const NonDependentTextureQueryCallInfos &queries, const uint32_t render_info_id, spv::Function *spv_func_main, std::vector<uint32_t> &interfaces);
 
-} // namespace usse
-} // namespace shader
+} // namespace shader::usse

@@ -1,6 +1,6 @@
 
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -57,7 +57,7 @@ static spv::Id get_uv_coeffs(spv::Builder &b, const spv::Id std_builtins, spv::I
     // un-normalize the coordinates
     coords = b.createBinOp(spv::OpFMul, v2f32, coords, image_size);
 
-    // substract 0.5 to each coord
+    // subtract 0.5 to each coord
     const spv::Id half = b.makeFloatConstant(0.5f);
     const spv::Id v2half = b.makeCompositeConstant(v2f32, { half, half });
     coords = b.createBinOp(spv::OpFSub, v2f32, coords, v2half);
@@ -75,7 +75,7 @@ spv::Id shader::usse::USSETranslatorVisitor::do_fetch_texture(const spv::Id tex,
 
         // Shuffle if number of components is larger than 2
         if (m_b.getNumComponents(coord_id) > 2) {
-            coord_id = m_b.createOp(spv::OpVectorShuffle, type_f32_v[2], { coord_id, coord_id, 0, 1 });
+            coord_id = m_b.createOp(spv::OpVectorShuffle, type_f32_v[2], { { true, coord_id }, { true, coord_id }, { false, 0 }, { false, 1 } });
         }
     }
 
@@ -96,11 +96,11 @@ spv::Id shader::usse::USSETranslatorVisitor::do_fetch_texture(const spv::Id tex,
 
         if (extra1 != spv::NoResult || lod_mode != 4) {
             // only keep the first two coordinates (x,y)
-            coord_id = m_b.createOp(spv::OpVectorShuffle, type_f32_v[2], { coord_id, coord_id, 0, 1 });
+            coord_id = m_b.createOp(spv::OpVectorShuffle, type_f32_v[2], { { true, coord_id }, { true, coord_id }, { false, 0 }, { false, 1 } });
             coord_id = m_b.createBuiltinCall(m_b.getTypeId(coord_id), std_builtins, GLSLstd450Fma, { coord_id, viewport_ratio, viewport_offset });
         } else {
             // extract the x,y and proj coordinate
-            spv::Id coord_xy = m_b.createOp(spv::OpVectorShuffle, type_f32_v[2], { coord_id, coord_id, 0, 1 });
+            spv::Id coord_xy = m_b.createOp(spv::OpVectorShuffle, type_f32_v[2], { { true, coord_id }, { true, coord_id }, { false, 0 }, { false, 1 } });
             spv::Id third_comp = m_b.createBinOp(spv::OpVectorExtractDynamic, type_f32, coord_id, m_b.makeIntConstant(2));
             third_comp = m_b.createCompositeConstruct(type_f32_v[2], { third_comp, third_comp });
 
@@ -111,7 +111,7 @@ spv::Id shader::usse::USSETranslatorVisitor::do_fetch_texture(const spv::Id tex,
             coord_xy = m_b.createBuiltinCall(m_b.getTypeId(coord_xy), std_builtins, GLSLstd450Fma, { coord_xy, viewport_ratio, viewport_offset });
 
             // add back the proj component
-            coord_id = m_b.createOp(spv::OpVectorShuffle, type_f32_v[3], { coord_xy, coord_id, 0, 1, 4 });
+            coord_id = m_b.createOp(spv::OpVectorShuffle, type_f32_v[3], { { true, coord_xy }, { true, coord_id }, { false, 0 }, { false, 1 }, { false, 4 } });
         }
     }
 
@@ -129,13 +129,23 @@ spv::Id shader::usse::USSETranslatorVisitor::do_fetch_texture(const spv::Id tex,
             op = spv::OpImageSampleImplicitLod;
     } else {
         op = spv::OpImageSampleExplicitLod;
-        if (lod_mode == 2) {
+        switch (lod_mode) {
+        case 1:
+            op = spv::OpImageSampleImplicitLod;
+            params.push_back(spv::ImageOperandsBiasMask);
+            params.push_back(extra1);
+            break;
+        case 2:
             params.push_back(spv::ImageOperandsLodMask);
             params.push_back(extra1);
-        } else if (lod_mode == 3) {
+            break;
+        case 3:
             params.push_back(spv::ImageOperandsGradMask);
             params.push_back(extra1);
             params.push_back(extra2);
+            break;
+        default:
+            break;
         }
     }
 
@@ -164,7 +174,7 @@ void shader::usse::USSETranslatorVisitor::do_texture_queries(const NonDependentT
 
         if (texture_query.prod_pos >= 0) {
             spv::Id texture_coord = m_b.createLoad(texture_query.coord.first, spv::NoPrecision);
-            coord_inst.first = m_b.createOp(spv::OpVectorShuffle, type_f32_v[3], { texture_coord, texture_coord, 0, 1, static_cast<spv::Id>(texture_query.prod_pos) });
+            coord_inst.first = m_b.createOp(spv::OpVectorShuffle, type_f32_v[3], { { true, texture_coord }, { true, texture_coord }, { false, 0 }, { false, 1 }, { false, static_cast<uint32_t>(texture_query.prod_pos) } });
             proj = true;
         }
 
@@ -201,12 +211,6 @@ bool USSETranslatorVisitor::smp(
     Imm7 src0_n,
     Imm7 src1_n,
     Imm7 src2_n) {
-    // LOD mode: none, bias, replace, gradient
-    if ((lod_mode != 0) && (lod_mode != 2) && (lod_mode != 3)) {
-        LOG_ERROR("Sampler LOD replace not implemented!");
-        return true;
-    }
-
     // Decode src0
     Instruction inst;
     inst.opr.src0 = decode_src0(inst.opr.src0, src0_n, src0_bank, src0_ext, true, 8, m_second_program);
@@ -221,7 +225,7 @@ bool USSETranslatorVisitor::smp(
     bool is_texture_buffer_load = false;
     // only used for a load using the texture buffer
     spv::Id texture_index = 0;
-    if (!m_spirv_params.samplers.count(inst.opr.src1.num)) {
+    if (!m_spirv_params.samplers.contains(inst.opr.src1.num)) {
         if (m_spirv_params.texture_buffer_sa_offset == -1) {
             LOG_ERROR("Can't get the sampler (sampler doesn't exist!)");
             return true;
@@ -280,7 +284,7 @@ bool USSETranslatorVisitor::smp(
         additional_info = ".gather4.uv";
         break;
     default:
-        additional_info = "";
+        additional_info.clear();
     }
 
     LOG_DISASM("{:016x}: {}SMP{}d.{}.{}{} {} {} {} {}", m_instr, disasm::e_predicate_str(pred), dim, disasm::data_type_str(inst.opr.dest.type), disasm::data_type_str(inst.opr.src0.type), additional_info,
@@ -337,11 +341,13 @@ bool USSETranslatorVisitor::smp(
         // ddy
         spv::Id extra2 = spv::NoResult;
 
+        // LOD mode: none, bias, replace, gradient
         if (lod_mode != 0) {
             inst.opr.src2 = decode_src12(inst.opr.src2, src2_n, src2_bank, src2_ext, true, 8, m_second_program);
             inst.opr.src2.type = inst.opr.src0.type;
 
             switch (lod_mode) {
+            case 1:
             case 2:
                 extra1 = load(inst.opr.src2, 0b1);
                 break;
@@ -471,7 +477,7 @@ bool USSETranslatorVisitor::smp(
                 // (1-u)(1-v) u(1-v)
                 const spv::Id comp2 = m_b.createBinOp(spv::OpVectorTimesScalar, type_f32_v[2], x_coeffs, onemv);
                 // (1-u)v uv u(1-v) (1-u)(1-v) in reversed order
-                const spv::Id coeffs = m_b.createOp(spv::OpVectorShuffle, type_f32_v[4], { comp1, comp2, 2, 3, 1, 0 });
+                const spv::Id coeffs = m_b.createOp(spv::OpVectorShuffle, type_f32_v[4], { { true, comp1 }, { true, comp2 }, { false, 2 }, { false, 3 }, { false, 1 }, { false, 0 } });
 
                 // bilinear coeffs are stored as float16
                 inst.opr.dest.type = DataType::F16;

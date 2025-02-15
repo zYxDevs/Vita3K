@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -25,6 +25,12 @@
 #define SCE_KERNEL_HIGHEST_DEFAULT_PRIORITY (SCE_KERNEL_DEFAULT_PRIORITY - 32)
 #define SCE_KERNEL_LOWEST_DEFAULT_PRIORITY (SCE_KERNEL_DEFAULT_PRIORITY + 31)
 #define SCE_KERNEL_CURRENT_THREAD_PRIORITY 0
+
+#define SCE_KERNEL_START_SUCCESS 0
+#define SCE_KERNEL_START_NO_RESIDENT 1
+#define SCE_KERNEL_START_FAILED 2
+#define SCE_KERNEL_STOP_SUCCESS 0
+#define SCE_KERNEL_STOP_FAIL 1
 
 #define SCE_KERNEL_THREAD_EVENT_TYPE_START 0x04
 #define SCE_KERNEL_THREAD_EVENT_TYPE_END 0x08
@@ -79,7 +85,7 @@ enum SceKernelModel {
     SCE_KERNEL_MODEL_VITATV
 };
 
-enum SceKernelErrorCode {
+enum SceKernelErrorCode : uint32_t {
     SCE_KERNEL_OK = 0x0,
     SCE_KERNEL_ERROR_ERROR = 0x80020001,
     SCE_KERNEL_ERROR_NOT_IMPLEMENTED = 0x80020002,
@@ -500,7 +506,7 @@ enum SceSysmoduleModuleId : uint16_t {
 };
 
 /** Available internal modules ID for ::sceSysmoduleLoadModuleInternal */
-enum SceSysmoduleInternalModuleId {
+enum SceSysmoduleInternalModuleId : uint32_t {
     SCE_SYSMODULE_INTERNAL_JPEG_ENC_ARM = 0x80000001, //!< sceJpegEncArm module
     SCE_SYSMODULE_INTERNAL_AUDIOCODEC = 0x80000002, //!< AudioCodec module
     SCE_SYSMODULE_INTERNAL_JPEG_ARM = 0x80000003, //!< sceJpegArm module
@@ -542,13 +548,29 @@ enum SceSysmoduleInternalModuleId {
     SCE_SYSMODULE_INTERNAL_LOCATION_FACTORY = 0x80000029 //!< Location Factory module
 };
 
+// Indexes in thread local storage (TLS) for system data. It is used mostly by libkernel.
+enum TlsItems {
+    TLS_PROCESS_ID = 0,
+    TLS_THREAD_ID = 1,
+    TLS_SP_TOP = 2,
+    TLS_SP_BOTTOM = 3,
+    TLS_VFP_EXCEPTION = 4,
+    TLS_RESERVED_5,
+    TLS_RESERVED_6, // libc reserved longjump addr
+    TLS_RESERVED_7, // libc reserved some memory address mask
+    TLS_CURRENT_PRIORITY = 8,
+    TLS_CPU_AFFINITY_MASK = 9,
+    TLS_NET_ERRNO = 0x40,
+    TLS_LIBC_ERRNO = 0x88,
+};
+
 struct SceSysmoduleOpt {
     int flags;
     Ptr<int> result;
     int unused[2];
 };
 
-enum SceSysmoduleErrorCode {
+enum SceSysmoduleErrorCode : uint32_t {
     SCE_SYSMODULE_LOADED = 0,
     SCE_SYSMODULE_ERROR_INVALID_VALUE = 0x805A1000,
     SCE_SYSMODULE_ERROR_UNLOADED = 0x805A1001,
@@ -590,8 +612,7 @@ struct SceKernelModuleInfo {
     SceKernelSegmentInfo segments[MODULE_INFO_NUM_SEGMENTS];
     SceUInt state; //!< see:SceKernelModuleState
 };
-
-typedef std::shared_ptr<SceKernelModuleInfo> SceKernelModuleInfoPtr;
+static_assert(sizeof(SceKernelModuleInfo) == 0x1B8);
 
 struct SceKernelStartModuleOpt {
     SceSize size;
@@ -600,7 +621,12 @@ struct SceKernelStartModuleOpt {
     SceUInt32 start;
 };
 
-static_assert(sizeof(SceKernelModuleInfo) == 0x1B8);
+struct SceKernelStopModuleOpt {
+    SceSize size;
+    SceUInt32 flags;
+    SceUInt32 epilogue;
+    SceUInt32 stop;
+};
 
 struct SceKernelMemBlockInfo {
     SceSize size;

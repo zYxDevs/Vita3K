@@ -85,6 +85,7 @@
 		<an_error_occurred>Une erreur est survenue.
 Code d'erreur: {}</an_error_occurred>
 		<cancel>Annuler</cancel>
+		<close>Fermer</close>
 		<delete>Supprimer</delete>
 		<file_corrupted>Le fichier est corrompu.</file_corrupted>
 		<microphone_disabled>Activez le microphone.</microphone_disabled>
@@ -436,9 +437,17 @@ Votre système Vita3K est prêt !</completed_setup>
 		</system>
 		<network name="Réseau">
 		</network>
-		<close>Fermer</close>
 		<save>Sauvegarder</save>
 	</settings_dialog>
+
+	<sys_apps_title>
+		<browser>Navigateur</browser>
+		<internet_browser>Navigateur Internet</internet_browser>
+		<trophies>Trophées</trophies>
+		<trophy_collection>Collection de trophées</trophy_collection>
+		<settings>Paramètres</settings>
+		<content_manager>Gestionnaire de contenu</content_manager>
+	</sys_apps_title>
 
 	<trophy_collection>
 		<delete_trophy>Supprimer le trophée</delete_trophy>
@@ -482,7 +491,8 @@ Voulez-vous vraiment continuer?</user_delete_warn>
 	<vita3k_update name="Mise à jour Vita3K">
  		<new_version_available>Une nouvelle version de Vita3K est disponible.</new_version_available>
 		<back>Précédent</back>
-		<cancel_update>Annuler la mise à jour ?</cancel_update>
+		<cancel_update_resume>Annuler la mise à jour ?
+Si vous annulez, Vita3K reprendra le téléchargement à ce point lors de la prochaine mise à jour.</cancel_update_resume>
 		<downloading>Téléchargement en cours...
 Une fois le téléchargement terminé, Vita3K redémarrera automatiquement et installera la nouvelle mise à jour.</downloading>
 		<not_complete_update>La mise à jour n'a pas pu être terminée.</not_complete_update>
@@ -498,8 +508,4 @@ Une fois le téléchargement terminé, Vita3K redémarrera automatiquement et in
 		<update>Mettre à jour</update>
 		<version>Version {}</version>
 	</vita3k_update>
-
-	<welcome name="Welcome to Vita3K">
-		<close>Fermer</close>
-	</welcome>
 </lang>

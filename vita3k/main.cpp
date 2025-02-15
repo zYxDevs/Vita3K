@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,14 +20,18 @@
 #include <app/functions.h>
 #include <config/functions.h>
 #include <config/version.h>
+#include <dialog/state.h>
 #include <display/state.h>
 #include <emuenv/state.h>
 #include <gui/functions.h>
 #include <gui/state.h>
+#include <include/cpu.h>
+#include <include/environment.h>
 #include <io/state.h>
 #include <kernel/state.h>
 #include <modules/module_parent.h>
 #include <packages/functions.h>
+#include <packages/license.h>
 #include <packages/pkg.h>
 #include <packages/sfo.h>
 #include <renderer/functions.h>
@@ -41,7 +45,7 @@
 #include <app/discord.h>
 #endif
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <combaseapi.h>
 #include <process.h>
 #endif
@@ -53,35 +57,35 @@
 #include <tracy/Tracy.hpp>
 
 static void run_execv(char *argv[], EmuEnvState &emuenv) {
-    char *args[10];
+    char const *args[10];
     args[0] = argv[0];
-    args[1] = (char *)"-a";
-    args[2] = (char *)"true";
+    args[1] = "-a";
+    args[2] = "true";
     if (!emuenv.load_app_path.empty()) {
-        args[3] = (char *)"-r";
+        args[3] = "-r";
         args[4] = emuenv.load_app_path.data();
         if (!emuenv.load_exec_path.empty()) {
-            args[5] = (char *)"--self";
+            args[5] = "--self";
             args[6] = emuenv.load_exec_path.data();
             if (!emuenv.load_exec_argv.empty()) {
-                args[7] = (char *)"--app-args";
+                args[7] = "--app-args";
                 args[8] = emuenv.load_exec_argv.data();
-                args[9] = NULL;
+                args[9] = nullptr;
             } else
-                args[7] = NULL;
+                args[7] = nullptr;
         } else
-            args[5] = NULL;
+            args[5] = nullptr;
     } else
-        args[3] = NULL;
+        args[3] = nullptr;
 
         // Execute the emulator again with some arguments
-#ifdef WIN32
+#ifdef _WIN32
     FreeConsole();
     _execv(argv[0], args);
 #elif defined(__unix__) || defined(__APPLE__) && defined(__MACH__)
-    execv(argv[0], args);
+    execv(argv[0], const_cast<char *const *>(args));
 #endif
-};
+}
 
 int main(int argc, char *argv[]) {
     ZoneScoped; // Tracy - Track main function scope
@@ -94,7 +98,7 @@ int main(int argc, char *argv[]) {
 
     // Check admin privs before init starts to avoid creating of file as other user by accident
     bool adminPriv = false;
-#ifdef WIN32
+#ifdef _WIN32
     // https://stackoverflow.com/questions/8046097/how-to-check-if-a-process-has-the-administrative-rights
     HANDLE hToken = NULL;
     if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
@@ -113,7 +117,7 @@ int main(int argc, char *argv[]) {
 
     // if either effective uid or uid is the one of the root user assume running as root.
     // else if euid and uid are different then permissions errors can happen if its running
-    // as a completly different user than the uid/euid
+    // as a completely different user than the uid/euid
     if (uid == 0 || euid == 0 || uid != euid)
         adminPriv = true;
 #endif
@@ -126,8 +130,7 @@ int main(int argc, char *argv[]) {
     EmuEnvState emuenv;
     const auto config_err = config::init_config(cfg, argc, argv, root_paths);
 
-    if (!fs::exists(cfg.pref_path))
-        fs::create_directories(cfg.pref_path);
+    fs::create_directories(cfg.get_pref_path());
 
     if (config_err != Success) {
         if (config_err == QuitRequested) {
@@ -137,31 +140,35 @@ int main(int argc, char *argv[]) {
             }
             if (cfg.delete_title_id.has_value()) {
                 LOG_INFO("Deleting title id {}", *cfg.delete_title_id);
-                fs::remove_all(fs::path(cfg.pref_path) / "ux0/app" / *cfg.delete_title_id);
-                fs::remove_all(fs::path(cfg.pref_path) / "ux0/addcont" / *cfg.delete_title_id);
-                fs::remove_all(fs::path(cfg.pref_path) / "ux0/user/00/savedata" / *cfg.delete_title_id);
-                fs::remove_all(fs::path(root_paths.get_cache_path()) / "shaders" / *cfg.delete_title_id);
+                fs::remove_all(cfg.get_pref_path() / "ux0/app" / *cfg.delete_title_id);
+                fs::remove_all(cfg.get_pref_path() / "ux0/addcont" / *cfg.delete_title_id);
+                fs::remove_all(cfg.get_pref_path() / "ux0/user/00/savedata" / *cfg.delete_title_id);
+                fs::remove_all(root_paths.get_cache_path() / "shaders" / *cfg.delete_title_id);
             }
             if (cfg.pup_path.has_value()) {
                 LOG_INFO("Installing firmware file {}", *cfg.pup_path);
-                install_pup(string_utils::utf_to_wide(cfg.pref_path), *cfg.pup_path, [](uint32_t progress) {
+                install_pup(cfg.get_pref_path(), *cfg.pup_path, [](uint32_t progress) {
                     LOG_INFO("Firmware installation progress: {}%", progress);
                 });
             }
             if (cfg.pkg_path.has_value() && cfg.pkg_zrif.has_value()) {
                 LOG_INFO("Installing pkg from {} ", *cfg.pkg_path);
-                emuenv.cache_path = string_utils::utf_to_wide(root_paths.get_cache_path_string());
-                emuenv.pref_path = string_utils::utf_to_wide(cfg.pref_path);
-                install_pkg(*cfg.pkg_path, emuenv, *cfg.pkg_zrif, [](float) {});
+                emuenv.cache_path = root_paths.get_cache_path().generic_path();
+                emuenv.pref_path = cfg.get_pref_path();
+                auto pkg_path = fs_utils::utf8_to_path(*cfg.pkg_path);
+                install_pkg(pkg_path, emuenv, *cfg.pkg_zrif, [](float) {});
             }
             return Success;
         }
+        LOG_ERROR("Failed to initialise config");
         return InitConfigFailed;
     }
 
-#ifdef WIN32
-    auto res = CoInitializeEx(NULL, COINIT_MULTITHREADED);
-    LOG_ERROR_IF(res == S_FALSE, "Failed to initialize COM Library");
+#ifdef _WIN32
+    {
+        auto res = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+        LOG_ERROR_IF(res == S_FALSE, "Failed to initialize COM Library");
+    }
 #endif
 
     if (cfg.console) {
@@ -179,7 +186,11 @@ int main(int argc, char *argv[]) {
         SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_SWITCH, "1");
         SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_JOY_CONS, "1");
 
-        if (SDL_Init(SDL_INIT_GAMECONTROLLER | SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
+        // Enable High DPI support
+#ifdef _WIN32
+        SDL_SetHint(SDL_HINT_WINDOWS_DPI_SCALING, "1");
+#endif
+        if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
             app::error_dialog("SDL initialisation failed.");
             return SDLInitFailed;
         }
@@ -187,7 +198,8 @@ int main(int argc, char *argv[]) {
     }
 
     LOG_INFO("{}", window_title);
-    LOG_INFO("Number of logical CPU cores: {}", SDL_GetCPUCount());
+    LOG_INFO("OS: {}", CppCommon::Environment::OSVersion());
+    LOG_INFO("CPU: {} | {} Threads | {} GHz", CppCommon::CPU::Architecture(), CppCommon::CPU::LogicalCores(), static_cast<float>(CppCommon::CPU::ClockSpeed()) / 1000.f);
     LOG_INFO("Available ram memory: {} MiB", SDL_GetSystemRAM());
 
     app::AppRunType run_type = app::AppRunType::Unknown;
@@ -212,15 +224,15 @@ int main(int argc, char *argv[]) {
                 if (handle_events(emuenv, gui)) {
                     gui::draw_begin(gui, emuenv);
                     gui::draw_initial_setup(gui, emuenv);
-                    gui::draw_end(gui, emuenv.window.get());
+                    gui::draw_end(gui);
                     emuenv.renderer->swap_window(emuenv.window.get());
                 } else
                     return QuitRequested;
             }
-            config::serialize_config(emuenv.cfg, emuenv.config_path);
             run_execv(argv, emuenv);
         }
         gui::init(gui, emuenv);
+        app::update_viewport(emuenv);
     }
 
     if (cfg.content_path.has_value()) {
@@ -231,7 +243,7 @@ int main(int argc, char *argv[]) {
         const auto is_directory = fs::is_directory(*cfg.content_path);
 
         const auto content_is_app = [&]() {
-            std::vector<ContentInfo> contents_info = install_archive(emuenv, gui_ptr, string_utils::utf_to_wide(cfg.content_path->string()));
+            std::vector<ContentInfo> contents_info = install_archive(emuenv, gui_ptr, *cfg.content_path);
             const auto content_index = std::find_if(contents_info.begin(), contents_info.end(), [&](const ContentInfo &c) {
                 return c.category == "gd";
             });
@@ -248,7 +260,7 @@ int main(int argc, char *argv[]) {
             if (is_rif)
                 copy_license(emuenv, *cfg.content_path);
             else if (!is_archive && !is_directory)
-                LOG_ERROR("File dropped: [{}] is not supported.", cfg.content_path->string());
+                LOG_ERROR("File dropped: [{}] is not supported.", *cfg.content_path);
 
             emuenv.cfg.content_path.reset();
             if (!cfg.console)
@@ -298,7 +310,7 @@ int main(int argc, char *argv[]) {
                 gui::draw_vita_area(gui, emuenv);
                 gui::draw_ui(gui, emuenv);
 
-                gui::draw_end(gui, emuenv.window.get());
+                gui::draw_end(gui);
                 emuenv.renderer->swap_window(emuenv.window.get());
                 FrameMark; // Tracy - Frame end mark for UI rendering loop
             } else {
@@ -325,19 +337,18 @@ int main(int argc, char *argv[]) {
     const auto APP_INDEX = gui::get_app_index(gui, emuenv.io.app_path);
     emuenv.app_info.app_version = APP_INDEX->app_ver;
     emuenv.app_info.app_category = APP_INDEX->category;
-    emuenv.app_info.app_content_id = APP_INDEX->content_id;
     emuenv.io.addcont = APP_INDEX->addcont;
+    emuenv.io.content_id = APP_INDEX->content_id;
     emuenv.io.savedata = APP_INDEX->savedata;
     emuenv.current_app_title = APP_INDEX->title;
     emuenv.app_info.app_short_title = APP_INDEX->stitle;
     emuenv.io.title_id = APP_INDEX->title_id;
 
     // Check license for PS App Only
-    if (emuenv.io.title_id.starts_with("PCS"))
-        emuenv.app_sku_flag = get_license_sku_flag(emuenv, emuenv.app_info.app_content_id);
+    get_license(emuenv, emuenv.io.title_id, emuenv.io.content_id);
 
     if (cfg.console) {
-        auto main_thread = emuenv.kernel.threads.at(emuenv.main_thread_id);
+        auto main_thread = emuenv.kernel.get_thread(emuenv.main_thread_id);
         auto lock = std::unique_lock<std::mutex>(main_thread->mutex);
         main_thread->status_cond.wait(lock, [&]() {
             return main_thread->status == ThreadStatus::dormant;
@@ -356,8 +367,8 @@ int main(int argc, char *argv[]) {
     }
 
     const auto draw_app_background = [](GuiState &gui, EmuEnvState &emuenv) {
-        const auto pos_min = ImVec2(emuenv.viewport_pos.x, emuenv.viewport_pos.y);
-        const auto pos_max = ImVec2(pos_min.x + emuenv.viewport_size.x, pos_min.y + emuenv.viewport_size.y);
+        const auto pos_min = ImVec2(emuenv.logical_viewport_pos.x, emuenv.logical_viewport_pos.y);
+        const auto pos_max = ImVec2(pos_min.x + emuenv.logical_viewport_size.x, pos_min.y + emuenv.logical_viewport_size.y);
 
         if (gui.apps_background.contains(emuenv.io.app_path))
             // Display application background
@@ -369,15 +380,14 @@ int main(int argc, char *argv[]) {
 
     int32_t main_module_id;
     {
-        const auto err = load_app(main_module_id, emuenv, string_utils::utf_to_wide(emuenv.io.app_path));
+        const auto err = load_app(main_module_id, emuenv);
         if (err != Success)
             return err;
     }
     gui.vita_area.information_bar = false;
 
     // Pre-Compile Shaders
-    emuenv.renderer->title_id = emuenv.io.title_id.c_str();
-    emuenv.renderer->self_name = emuenv.self_name.c_str();
+    emuenv.renderer->set_app(emuenv.io.title_id.c_str(), emuenv.self_name.c_str());
     if (renderer::get_shaders_cache_hashs(*emuenv.renderer) && cfg.shader_cache) {
         SDL_SetWindowTitle(emuenv.window.get(), fmt::format("{} | {} ({}) | Please wait, compiling shaders...", window_title, emuenv.current_app_title, emuenv.io.title_id).c_str());
         for (const auto &hash : emuenv.renderer->shaders_cache_hashs) {
@@ -388,7 +398,7 @@ int main(int argc, char *argv[]) {
             emuenv.renderer->precompile_shader(hash);
             gui::draw_pre_compiling_shaders_progress(gui, emuenv, uint32_t(emuenv.renderer->shaders_cache_hashs.size()));
 
-            gui::draw_end(gui, emuenv.window.get());
+            gui::draw_end(gui);
             emuenv.renderer->swap_window(emuenv.window.get());
         }
     }
@@ -404,15 +414,15 @@ int main(int argc, char *argv[]) {
         // Driver acto!
         renderer::process_batches(*emuenv.renderer.get(), emuenv.renderer->features, emuenv.mem, emuenv.cfg);
 
-        const SceFVector2 viewport_pos = { emuenv.viewport_pos.x, emuenv.viewport_pos.y };
-        const SceFVector2 viewport_size = { emuenv.viewport_size.x, emuenv.viewport_size.y };
+        const SceFVector2 viewport_pos = { emuenv.drawable_viewport_pos.x, emuenv.drawable_viewport_pos.y };
+        const SceFVector2 viewport_size = { emuenv.drawable_viewport_size.x, emuenv.drawable_viewport_size.y };
         emuenv.renderer->render_frame(viewport_pos, viewport_size, emuenv.display, emuenv.gxm, emuenv.mem);
 
         gui::draw_begin(gui, emuenv);
         gui::draw_common_dialog(gui, emuenv);
         draw_app_background(gui, emuenv);
 
-        gui::draw_end(gui, emuenv.window.get());
+        gui::draw_end(gui);
         emuenv.renderer->swap_window(emuenv.window.get());
         FrameMark; // Tracy - Frame end mark for game loading loop
     }
@@ -422,8 +432,8 @@ int main(int argc, char *argv[]) {
         // Driver acto!
         renderer::process_batches(*emuenv.renderer.get(), emuenv.renderer->features, emuenv.mem, emuenv.cfg);
 
-        const SceFVector2 viewport_pos = { emuenv.viewport_pos.x, emuenv.viewport_pos.y };
-        const SceFVector2 viewport_size = { emuenv.viewport_size.x, emuenv.viewport_size.y };
+        const SceFVector2 viewport_pos = { emuenv.drawable_viewport_pos.x, emuenv.drawable_viewport_pos.y };
+        const SceFVector2 viewport_size = { emuenv.drawable_viewport_size.x, emuenv.drawable_viewport_size.y };
         emuenv.renderer->render_frame(viewport_pos, viewport_size, emuenv.display, emuenv.gxm, emuenv.mem);
         // Calculate FPS
         app::calculate_fps(emuenv);
@@ -436,8 +446,11 @@ int main(int argc, char *argv[]) {
             gui::draw_common_dialog(gui, emuenv);
         gui::draw_vita_area(gui, emuenv);
 
-        if (emuenv.cfg.performance_overlay && !emuenv.kernel.is_threads_paused() && (emuenv.common_dialog.status != SCE_COMMON_DIALOG_STATUS_RUNNING))
+        if (emuenv.cfg.performance_overlay && !emuenv.kernel.is_threads_paused() && (emuenv.common_dialog.status != SCE_COMMON_DIALOG_STATUS_RUNNING)) {
+            ImGui::PushFont(gui.vita_font[emuenv.current_font_level]);
             gui::draw_perf_overlay(gui, emuenv);
+            ImGui::PopFont();
+        }
 
         if (emuenv.cfg.current_config.show_touchpad_cursor && !emuenv.kernel.is_threads_paused())
             gui::draw_touchpad_cursor(emuenv);
@@ -446,12 +459,12 @@ int main(int argc, char *argv[]) {
             gui::draw_ui(gui, emuenv);
         }
 
-        gui::draw_end(gui, emuenv.window.get());
+        gui::draw_end(gui);
         emuenv.renderer->swap_window(emuenv.window.get());
         FrameMark; // Tracy - Frame end mark for game rendering loop
     }
 
-#ifdef WIN32
+#ifdef _WIN32
     CoUninitialize();
 #endif
 

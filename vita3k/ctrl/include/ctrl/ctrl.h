@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@
 
 #include <util/types.h>
 
-enum SceCtrlErrorCode {
+enum SceCtrlErrorCode : uint32_t {
     SCE_CTRL_ERROR_INVALID_ARG = 0x80340001,
     SCE_CTRL_ERROR_PRIV_REQUIRED = 0x80340002,
     SCE_CTRL_ERROR_NO_DEVICE = 0x80340020,
@@ -28,7 +28,7 @@ enum SceCtrlErrorCode {
     SCE_CTRL_ERROR_FATAL = 0x803400FF
 };
 
-enum SceCtrlButtons {
+enum SceCtrlButtons : uint32_t {
     SCE_CTRL_SELECT = 0x00000001, //!< Select button.
     SCE_CTRL_L3 = 0x00000002, //!< L3 button.
     SCE_CTRL_R3 = 0x00000004, //!< R3 button.

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,7 +17,9 @@
 
 #include <cpu/functions.h>
 #include <cpu/impl/unicorn_cpu.h>
+#include <mem/functions.h>
 #include <mem/ptr.h>
+#include <mem/util.h>
 #include <util/log.h>
 
 #include <cassert>
@@ -323,7 +325,7 @@ void UnicornCPU::set_fpscr(uint32_t val) {
 float UnicornCPU::get_float_reg(uint8_t idx) {
     DoubleReg value;
 
-    const int single_index = static_cast<int>(idx / 2);
+    const int single_index = idx / 2;
     const uc_err err = uc_reg_read(uc.get(), UC_ARM_REG_D0 + single_index, &value);
     assert(err == UC_ERR_OK);
     return value.f[idx % 2];
@@ -332,7 +334,7 @@ float UnicornCPU::get_float_reg(uint8_t idx) {
 void UnicornCPU::set_float_reg(uint8_t idx, float val) {
     DoubleReg value;
 
-    const int single_index = static_cast<int>(idx / 2);
+    const int single_index = idx / 2;
     uc_err err = uc_reg_read(uc.get(), UC_ARM_REG_D0 + single_index, &value);
     assert(err == UC_ERR_OK);
     value.f[idx % 2] = val;
@@ -369,7 +371,7 @@ CPUContext UnicornCPU::save_context() {
     return ctx;
 }
 
-void UnicornCPU::load_context(CPUContext ctx) {
+void UnicornCPU::load_context(const CPUContext &ctx) {
     for (size_t i = 0; i < ctx.fpu_registers.size(); i++) {
         set_float_reg(i, ctx.fpu_registers[i]);
     }

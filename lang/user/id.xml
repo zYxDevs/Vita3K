@@ -77,7 +77,7 @@ tergantung pada ukuran dan perangkat keras Kamu.</app_delete_description>
 		</delete>
 		<info>
 			<eligible>Memenuhi Syarat</eligible>
-			<ineligible>Tidak Memenuhi Syarat</ineligible>
+			<ineligible>Gak Memenuhi Syarat</ineligible>
 			<level>Level</level>
 			<name>Nama</name>
 			<trophy_earning>Perolehan Trofi</trophy_earning>
@@ -103,6 +103,7 @@ tergantung pada ukuran dan perangkat keras Kamu.</app_delete_description>
 		<an_error_occurred>Terjadi kesalahan.
 Kode kesalahan: {}</an_error_occurred>
 		<cancel>Batal</cancel>
+		<close>Tutup</close>
 		<delete>Hapus</delete>
 		<file_corrupted>File ini udah corrupt.</file_corrupted>
 		<microphone_disabled>Nonaktifkan microphone.</microphone_disabled>
@@ -115,7 +116,7 @@ Kode kesalahan: {}</an_error_occurred>
 		<yes>Iya</yes>
 		<wday>
 			<day>Minggu</day>
-			<day>Senen</day>
+			<day>Senin</day>
 			<day>Selasa</day>
 			<day>Rabu</day>
 			<day>Kamis</day>
@@ -348,7 +349,7 @@ Sambungkan Kontroleryang kompatibel dengan SDL2.</not_connected>
 Tidak ada cukup ruang kosong di kartu memori.</could_not_save>
 				<not_free_space>Tidak ada cukup ruang kosong di kartu memori.</not_free_space>
 				<new_saved_data>Save Data Baru</new_saved_data>
-				<saving_complete>Saving Berhasil.</saving_complete>
+				<saving_complete>Simpan Telah Berhasil.</saving_complete>
 				<save_the_data>Kamu yakin save di data ini?</save_the_data>
 				<saving>Ngesave…</saving>
 				<warning_saving>Ngesave…
@@ -387,32 +388,6 @@ Jangan matikan sistem atau tutup aplikasi ini.</warning_saving>
 		<no_notif>Tidak ada notifikasi.</no_notif>
 		<trophy_earned>Kamu telah mendapatkan trofi!</trophy_earned>
 	</indicator>
-
-	<initial_setup>
-		<back>Kembali</back>
-		<completed_setup>Kamu sekarang telah menyelesaikan penyiapan awal.
-Sistem Vita3K Kamu sudah siap!</completed_setup>
-		<select_language>Pilih bahasa.</select_language>
-		<select_pref_path>Pilih pref path.</select_pref_path>
-		<current_emu_path>Path emulator saat ini</current_emu_path>
-		<change_emu_path>Ubah Path Emulator</change_emu_path>
-		<reset_emu_path>Path Reset Emulator</reset_emu_path>
-		<install_highly_recommended>Menginstalasi kedua file firmware sangat direkomendasikan.</install_highly_recommended>
-		<installed>Instalasi:</installed>
-		<select_interface_settings>Pilih pengaturan interface.</select_interface_settings>
-		<show_info_bar>Bar Info Terlihat</show_info_bar>
-		<info_bar_description>Centang kotak untuk menampilkan Bar info di dalam pemilih aplikasi.
-Bar info adalah jam, level baterai, dan pusat notifikasi.</info_bar_description>
-		<show_live_area_screen>Apl Dilayar Live Area</show_live_area_screen>
-		<live_area_screen_description>Centang kotak untuk membuka Live Area secara default saat mengklik aplikasi.
-Jika dinonaktifkan, klik kanan pada aplikasi untuk membukanya.</live_area_screen_description>
-		<apps_list_grid>Mode Grid</apps_list_grid>
-		<apps_list_grid_description>Centang kotak untuk mengatur daftar aplikasi ke mode grid seperti PS Vita.</apps_list_grid_description>
-		<icon_size>Ukuran Icon Aplikasi</icon_size>
-		<select_icon_size>Pilih ukuran icon pilihan kamu.</select_icon_size>
-		<completed>Telah selesai.</completed>
-		<next>Lanjut</next>
-	</initial_setup>
 
 	<install_dialog>
 		<firmware_install>
@@ -519,8 +494,8 @@ Asia. (Umumnya Direkomendasikan)</firmware_font_package_note>
 				<mm_dd_yyyy>BB/HH/TTTT</mm_dd_yyyy>
 			</date_format>
 			<time_format name="Atur Waktu">
-				<clock_12_hour>12-Jam Clock</clock_12_hour>
-				<clock_24_hour>24-Jam Clock</clock_24_hour>
+				<clock_12_hour>Atur 12-Jam</clock_12_hour>
+				<clock_24_hour>Atur 24-Jam</clock_24_hour>
 			</time_format>
 		</date_time>
 		<language name="Bahasa">
@@ -530,8 +505,8 @@ Asia. (Umumnya Direkomendasikan)</firmware_font_package_note>
 					<ime_languages>
 						<lang id="1">Denmark</lang>
 						<lang id="2">Jerman</lang>
-						<lang id="262144">English (United Kingdom)</lang>
-						<lang id="4">English (United States)</lang>
+						<lang id="262144">Inggris (United Kingdom)</lang>
+						<lang id="4">Inggris (United States)</lang>
 						<lang id="8">Spanyol</lang>
 						<lang id="16">Perancis</lang>
 						<lang id="32">Italia</lang>
@@ -559,7 +534,7 @@ Asia. (Umumnya Direkomendasikan)</firmware_font_package_note>
 			<clear_list>Bersihkan Daftar</clear_list>
 			<no_modules>Tidak ada modul.
 Silakan download dan install firmware PS Vita terakhir.</no_modules>
-			<refresh_list>Segarkan Daftar</refresh_list>
+			<refresh_list>Perbarui Daftar</refresh_list>
 		</core>
 		<cpu>
 			<cpu_backend>Bagian Belakang CPU</cpu_backend>
@@ -602,6 +577,12 @@ Perhatikan bahwa beberapa ekstensi bermanfaat akan dinonaktifkan,
 dan tidak semua GPU kompatibel dengan ini.</spirv_shader_description>
 			<clean_shaders>Bersihkan Shader Cache dan Log</clean_shaders>
 		</gpu>
+		<audio name="Audio">
+			<audio_backend>Bagian Belakang Audio</audio_backend>
+			<select_audio_backend>Pilih backend audio pilihan Kamu.</select_audio_backend>
+			<enable_ngs_support>Aktifkan NGS Audio</enable_ngs_support>
+			<ngs_description>Hapus centang pada kotak untuk menonaktifkan dukungan untuk NGS perpustakaan audio tingkat lanjut.</ngs_description>
+		</audio>
 		<system name="System">
 			<select_enter_button>Masukkan penetapan tombol
 Pilih tombol 'Masuk' kamu.</select_enter_button>
@@ -618,10 +599,6 @@ Beberapa aplikasi tidak menggunakan ini dan mendapatkan tombol konfirmasi defaul
 		</system>
 		<emulator name="Emulator">
 			<boot_apps_full_screen>Boot aplikasi dalam layar penuh</boot_apps_full_screen>
-			<audio_backend>Bagian Belakang Audio</audio_backend>
-			<select_audio_backend>Pilih backend audio pilihan Kamu.</select_audio_backend>
-			<enable_ngs_support>Aktifkan NGS Audio</enable_ngs_support>
-			<ngs_description>Hapus centang pada kotak untuk menonaktifkan dukungan untuk NGS perpustakaan audio tingkat lanjut.</ngs_description>
 			<log_level>Tingkatan Log</log_level>
 			<select_log_level>Pilih tingkat log pilihan Kamu.</select_log_level>
 			<archive_log>Log Arsip</archive_log>
@@ -662,6 +639,8 @@ Kamu perlu memindahkan folder lama ke lokasi baru secara manual.</reset_emu_path
 			<gui_description>Centang kotak untuk menampilkan GUI setelah mem-boot aplikasi.</gui_description>
 			<show_info_bar>Info Bar Terlihat</show_info_bar>
 			<info_bar_description>Centang kotak untuk menampilkan bar info di dalam pemilih aplikasi.</info_bar_description>
+			<user_lang>bahasa GUI</user_lang>
+			<select_user_lang>Pilih bahasa User kamu.</select_user_lang>
 			<display_info_message>Tampilkan Pesan Info</display_info_message>
 			<display_info_message_description>Hapus centang pada kotak untuk menampilkan pesan info di log saja.</display_info_message_description>
 			<display_system_apps>Tampilkan System Aplikasi</display_system_apps>
@@ -737,7 +716,6 @@ lebih rendah dapat meningkatkan performa tetapi dapat membuat game tidak stabil 
 			<unwatch_import_calls>Hapus Impor Panggilan</unwatch_import_calls>
 			<watch_import_calls>Tonton Impor Panggilan</watch_import_calls>
 		</debug>
-		<close>Tutup</close>
 		<save_reboot>Simpan & BuatUlang</save_reboot>
 		<save_apply>Simpan & Terapkan</save_apply>
 		<save>Simpan</save>
@@ -814,6 +792,5 @@ berjalan.</check_compatibility>
 		<discord_help>Dukungan tambahan dapat ditemukan di saluran #help channel dari</discord_help>
 		<no_piracy>Vita3K tidak memaafkan pembajakan. Kamu harus dump game kamu sendiri.</no_piracy>
 		<show_next_time>Tunjukkan lain kali</show_next_time>
-		<close>Tutup</close>
 	</welcome>
 </lang>

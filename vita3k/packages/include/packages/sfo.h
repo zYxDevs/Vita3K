@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -25,8 +25,9 @@
 
 #pragma once
 
-#include <cstdint>
 #include <io/vfs.h>
+
+#include <cstdint>
 #include <string>
 #include <utility> // pair
 #include <vector>
@@ -89,5 +90,5 @@ bool load(SfoFile &sfile, const std::vector<uint8_t> &content);
  * @param param File buffer pointing to the `param.sfo` file to parse
  * @param sys_lang System language. It is used to get translated strings from `param.sfo`
  */
-void get_param_info(sfo::SfoAppInfo &app_info, const vfs::FileBuffer param, int sys_lang);
+void get_param_info(sfo::SfoAppInfo &app_info, const vfs::FileBuffer &param, int sys_lang);
 } // namespace sfo

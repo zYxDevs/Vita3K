@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,15 +17,15 @@
 
 #pragma once
 
-#include <atomic>
 #include <kernel/callback.h>
 #include <mem/ptr.h>
+#include <util/types.h>
+
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <thread>
 #include <vector>
-
-#include <util/types.h>
 
 enum SceDisplayPixelFormat {
     SCE_DISPLAY_PIXELFORMAT_A8B8G8R8 = 0x00000000U
@@ -68,6 +68,12 @@ struct DisplayState {
     std::vector<DisplayStateVBlankWaitInfo> vblank_wait_infos;
     std::atomic<uint64_t> last_setframe_vblank_count = 0;
     std::map<SceUID, CallbackPtr> vblank_callbacks{};
+
+    // if set to true, make sceDisplayWaitVblankStartMulti/sceDisplayWaitSetFrameBufMulti behave as sceDisplayWaitVblankStart/sceDisplayWaitSetFrameBuf
+    // this allows some game running at 30fps to run at 60fps without any issue
+    // however this is not always the case, some games may not be affected (if they look at the Vcount)
+    // or run twice as fast (if they only rely on these function calls for their timings)
+    bool fps_hack = false;
 
     // should contain the list of sync objects / swapchain images (in the order they appear in the cycle)
     std::vector<PredictedDisplayFrame> predicted_frames;

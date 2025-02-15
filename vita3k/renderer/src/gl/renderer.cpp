@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -38,7 +38,8 @@
 #include <SDL_video.h>
 
 #include <array>
-#include <sstream>
+#include <mutex>
+#include <string_view>
 
 namespace renderer::gl {
 
@@ -111,13 +112,11 @@ void bind_fundamental(GLContext &context) {
 }
 
 static void after_callback(void *ret, const char *name, GLADapiproc apiproc, int len_args, ...) {
-    GLenum error_code;
-
     GLAD_UNUSED(ret);
     GLAD_UNUSED(apiproc);
     GLAD_UNUSED(len_args);
 
-    error_code = glad_glGetError();
+    GLenum error_code = glad_glGetError();
 
     if (error_code != GL_NO_ERROR) {
         LOG_ERROR("OpenGL: {} set error {}.", name, error_code);
@@ -175,10 +174,9 @@ static void debug_output_callback(GLenum source, GLenum type, GLuint id, GLenum 
 
 bool create(SDL_Window *window, std::unique_ptr<State> &state, const Config &config) {
     auto &gl_state = dynamic_cast<GLState &>(*state);
-    auto &hashless_texture_cache = config.hashless_texture_cache;
 
     // Recursively create GL version until one accepts
-    // Major 4 is mandantory
+    // Major 4 is mandatory
     // We use glBufferStorage which needs OpenGL 4.4
     constexpr std::array accept_gl_minor_versions = {
         6, // OpenGL 4.6
@@ -257,10 +255,10 @@ bool create(SDL_Window *window, std::unique_ptr<State> &state, const Config &con
     // always enabled in the opengl renderer
     gl_state.features.use_mask_bit = true;
 
-    return gl_state.init(gl_state.static_assets, hashless_texture_cache);
+    return gl_state.init();
 }
 
-bool GLState::init(const fs::path &static_assets, const bool hashless_texture_cache) {
+bool GLState::init() {
     if (!screen_renderer.init(static_assets)) {
         LOG_ERROR("Failed to initialize screen renderer");
         return false;
@@ -272,8 +270,7 @@ bool GLState::init(const fs::path &static_assets, const bool hashless_texture_ca
 }
 
 void GLState::late_init(const Config &cfg, const std::string_view game_id, MemState &mem) {
-    const fs::path texture_folder = fs::path(shared_path) / "textures";
-    texture_cache.init(cfg.hashless_texture_cache, texture_folder, game_id);
+    texture_cache.init(cfg.hashless_texture_cache, texture_folder(), game_id);
 }
 
 bool create(std::unique_ptr<Context> &context) {
@@ -282,7 +279,7 @@ bool create(std::unique_ptr<Context> &context) {
     context = std::make_unique<GLContext>();
     GLContext *gl_context = reinterpret_cast<GLContext *>(context.get());
 
-    const bool init_result = gl_context->vertex_array.init(reinterpret_cast<renderer::Generator *>(glGenVertexArrays), reinterpret_cast<renderer::Deleter *>(glDeleteVertexArrays));
+    const bool init_result = gl_context->vertex_array.init(glGenVertexArrays, glDeleteVertexArrays);
 
     if (!init_result) {
         return false;
@@ -297,14 +294,14 @@ bool create(GLState &state, std::unique_ptr<RenderTarget> &rt, const SceGxmRende
     rt = std::make_unique<GLRenderTarget>();
     GLRenderTarget *render_target = reinterpret_cast<GLRenderTarget *>(rt.get());
 
-    if (!render_target->maskbuffer.init(reinterpret_cast<renderer::Generator *>(glGenFramebuffers), reinterpret_cast<renderer::Deleter *>(glDeleteFramebuffers))) {
+    if (!render_target->maskbuffer.init(glGenFramebuffers, glDeleteFramebuffers)) {
         return false;
     }
 
-    render_target->width = params.width * state.res_multiplier;
-    render_target->height = params.height * state.res_multiplier;
+    render_target->width = static_cast<uint16_t>(params.width * state.res_multiplier);
+    render_target->height = static_cast<uint16_t>(params.height * state.res_multiplier);
 
-    render_target->attachments.init(reinterpret_cast<renderer::Generator *>(glGenTextures), reinterpret_cast<renderer::Deleter *>(glDeleteTextures));
+    render_target->attachments.init(glGenTextures, glDeleteTextures);
 
     glBindTexture(GL_TEXTURE_2D, render_target->attachments[0]);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, render_target->width, render_target->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
@@ -314,11 +311,11 @@ bool create(GLState &state, std::unique_ptr<RenderTarget> &rt, const SceGxmRende
     glBindTexture(GL_TEXTURE_2D, render_target->attachments[1]);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, render_target->width, render_target->height, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, nullptr);
 
-    render_target->masktexture.init(reinterpret_cast<renderer::Generator *>(glGenTextures), reinterpret_cast<renderer::Deleter *>(glDeleteTextures));
+    render_target->masktexture.init(glGenTextures, glDeleteTextures);
     glBindTexture(GL_TEXTURE_2D, render_target->masktexture[0]);
     // we need to make the masktexture format immutable, otherwise image load operations
     // won't work on mesa drivers
-    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, params.width * state.res_multiplier, params.height * state.res_multiplier);
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, render_target->width, render_target->height);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindFramebuffer(GL_FRAMEBUFFER, render_target->maskbuffer[0]);
@@ -444,7 +441,7 @@ static std::map<SceGxmColorFormat, std::pair<GLenum, GLenum>> GXM_COLOR_FORMAT_T
 
 static bool format_need_temp_storage(const GLState &state, SceGxmColorSurface &surface, std::vector<std::uint8_t> &storage, const std::uint32_t width, const std::uint32_t height) {
     size_t needed_pixels;
-    if (state.res_multiplier == 1) {
+    if (state.res_multiplier == 1.0f) {
         needed_pixels = surface.strideInPixels * height;
     } else {
         // width and height is already upscaled
@@ -456,7 +453,7 @@ static bool format_need_temp_storage(const GLState &state, SceGxmColorSurface &s
         return true;
     }
 
-    if (state.res_multiplier > 1) {
+    if (state.res_multiplier > 1.0f) {
         storage.resize(needed_pixels * gxm::bits_per_pixel(gxm::get_base_format(surface.colorFormat)) >> 3);
         return true;
     }
@@ -466,13 +463,13 @@ static bool format_need_temp_storage(const GLState &state, SceGxmColorSurface &s
 
 static void post_process_pixels_data(GLState &renderer, std::uint32_t *pixels, std::uint8_t *source, std::uint32_t width, std::uint32_t height, const std::uint32_t stride,
     SceGxmColorSurface &surface) {
-    uint8_t *curr_input = reinterpret_cast<uint8_t *>(source);
+    uint8_t *curr_input = source;
     uint8_t *curr_output = reinterpret_cast<uint8_t *>(pixels);
 
     const bool is_U8U8U8_RGBA = surface.colorFormat == SCE_GXM_COLOR_FORMAT_U8U8U8U8_RGBA;
     const bool is_SE5M9M9M9 = (surface.colorFormat == SCE_GXM_COLOR_FORMAT_SE5M9M9M9_RGB) || (surface.colorFormat == SCE_GXM_COLOR_FORMAT_SE5M9M9M9_BGR);
 
-    const int multiplier = renderer.res_multiplier;
+    const int multiplier = static_cast<int>(renderer.res_multiplier);
     if (multiplier > 1 || is_U8U8U8_RGBA || is_SE5M9M9M9) {
         // TODO: do this on the GPU instead (using texture blitting?)
         const int bytes_per_output_pixel = (gxm::bits_per_pixel(gxm::get_base_format(surface.colorFormat)) + 7) >> 3;
@@ -535,7 +532,7 @@ void lookup_and_get_surface_data(GLState &renderer, MemState &mem, SceGxmColorSu
 
     GLint tex_handle = static_cast<GLint>(renderer.surface_cache.retrieve_color_surface_texture_handle(renderer, static_cast<std::uint16_t>(surface.width),
         static_cast<std::uint16_t>(surface.height), static_cast<std::uint16_t>(surface.strideInPixels),
-        gxm::get_base_format(surface.colorFormat), surface.data, renderer::SurfaceTextureRetrievePurpose::READING, swizzle));
+        gxm::get_base_format(surface.colorFormat), surface.data, SurfaceTextureRetrievePurpose::READING, swizzle));
 
     if (tex_handle == 0) {
         return;
@@ -609,11 +606,12 @@ void get_surface_data(GLState &renderer, GLContext &context, uint32_t *pixels, S
     uint32_t width = surface.width;
     uint32_t height = surface.height;
 
-    if (renderer.res_multiplier == 1) {
+    const int res_multiplier = static_cast<int>(renderer.res_multiplier);
+    if (res_multiplier == 1) {
         glPixelStorei(GL_PACK_ROW_LENGTH, static_cast<GLint>(surface.strideInPixels));
     } else {
-        width *= renderer.res_multiplier;
-        height *= renderer.res_multiplier;
+        width *= res_multiplier;
+        height *= res_multiplier;
         glPixelStorei(GL_PACK_ROW_LENGTH, static_cast<GLint>(width));
     }
 
@@ -717,6 +715,18 @@ void GLState::swap_window(SDL_Window *window) {
     SDL_GL_SwapWindow(window);
 }
 
+std::vector<uint32_t> GLState::dump_frame(DisplayState &display, uint32_t &width, uint32_t &height) {
+    DisplayFrameInfo frame;
+    {
+        std::lock_guard<std::mutex> guard(display.display_info_mutex);
+        frame = display.next_rendered_frame;
+    }
+
+    width = static_cast<uint32_t>(frame.image_size.x * res_multiplier);
+    height = static_cast<uint32_t>(frame.image_size.y * res_multiplier);
+    return surface_cache.dump_frame(frame.base, width, height, frame.pitch, res_multiplier, features.support_get_texture_sub_image);
+}
+
 int GLState::get_supported_filters() {
     // actually it's not even bilinear, it's either bilinear or nearest depending on the last use of the texture..
     // TODO: add bicubic filter and allow disabling bilinear.
@@ -738,8 +748,18 @@ void GLState::set_anisotropic_filtering(int anisotropic_filtering) {
     texture_cache.anisotropic_filtering = anisotropic_filtering;
 }
 
+int GLState::get_max_2d_texture_width() {
+    GLint max_texture_size;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture_size);
+    return static_cast<int>(max_texture_size);
+}
+
+std::string_view GLState::get_gpu_name() {
+    return reinterpret_cast<const GLchar *>(glGetString(GL_RENDERER));
+}
+
 void GLState::precompile_shader(const ShadersHash &hash) {
-    pre_compile_program(*this, cache_path.c_str(), title_id, self_name, hash);
+    pre_compile_program(*this, hash);
 }
 
 void GLState::preclose_action() {}

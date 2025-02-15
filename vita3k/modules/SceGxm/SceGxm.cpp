@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,7 +20,8 @@
 #include <modules/module_parent.h>
 
 #include <span>
-#ifdef __x86_64__
+#include <stack>
+#if defined(__x86_64__) && !defined(__APPLE__)
 #include <xxh_x86dispatch.h>
 #else
 #define XXH_INLINE_ALL
@@ -37,7 +38,6 @@
 
 #include <SDL.h>
 #include <io/state.h>
-#include <mem/allocator.h>
 #include <mem/mempool.h>
 #include <renderer/functions.h>
 #include <renderer/state.h>
@@ -45,7 +45,6 @@
 #include <util/bytes.h>
 #include <util/lock_and_find.h>
 #include <util/log.h>
-#include <util/string_utils.h>
 
 #include <util/tracy.h>
 TRACY_MODULE_NAME(SceGxm);
@@ -899,10 +898,9 @@ static void display_entry_thread(EmuEnvState &emuenv) {
     const Address callback_address = emuenv.gxm.params.displayQueueCallback.address();
     const ThreadStatePtr display_thread = emuenv.kernel.get_thread(emuenv.gxm.display_queue_thread);
     if (!display_thread) {
-        LOG_CRITICAL("display_thread not found. thid:{}", display_thread->id);
+        LOG_CRITICAL("display_thread not found. thid:{}", emuenv.gxm.display_queue_thread);
         return;
     }
-    Ptr<SceGxmSyncObject> previous_sync = Ptr<SceGxmSyncObject>();
 
     while (true) {
         auto display_callback = display_queue.top();
@@ -912,11 +910,10 @@ static void display_entry_thread(EmuEnvState &emuenv) {
         SceGxmSyncObject *old_sync = display_callback->old_sync.get(emuenv.mem);
         SceGxmSyncObject *new_sync = display_callback->new_sync.get(emuenv.mem);
 
-        // Wait for fragment on the new buffer to finish
-        // set a (big) time limit to make sure we don't softlock
-        constexpr int one_second = 1'000'000;
-        if (!renderer::wishlist(new_sync, display_callback->new_sync_timestamp, one_second))
-            LOG_ERROR_ONCE("Failed to wait for the new frame to be ready");
+        // sceGxmDisplayQueueAddEntry waits for both buffers to complete
+        renderer::wishlist(old_sync, display_callback->old_sync_timestamp);
+        if (old_sync != new_sync)
+            renderer::wishlist(new_sync, display_callback->new_sync_timestamp);
 
         // now we can remove the thread from the display queue
         display_queue.pop();
@@ -928,20 +925,14 @@ static void display_entry_thread(EmuEnvState &emuenv) {
         // Now run callback
         display_thread->run_guest_function(callback_address, display_callback->data);
 
+        // Notifies the renderer of the completion of the callback for the display_entry.
+        // The last_display of the entry, when pushed into the queue, is guaranteed to be timestamp_ahead + 1 at the time of the call.
+        renderer::subject_done(old_sync, display_callback->old_sync_timestamp + 1);
+        if (old_sync != new_sync)
+            renderer::subject_done(new_sync, display_callback->new_sync_timestamp + 1);
+
         free(emuenv.mem, display_callback->data);
-
-        // The only thing old buffer should be waiting for is to stop being displayed
-        renderer::subject_done(old_sync, std::min(old_sync->timestamp_current + 1, old_sync->timestamp_ahead.load()));
-        if (previous_sync && display_callback->old_sync != previous_sync) {
-            // in this case, also set the previous sync object to avoid deadlocks
-            SceGxmSyncObject *other_old_sync = previous_sync.get(emuenv.mem);
-            renderer::subject_done(other_old_sync, std::min(other_old_sync->timestamp_current + 1, other_old_sync->timestamp_ahead.load()));
-        }
-
-        previous_sync = display_callback->new_sync;
     }
-
-    return;
 }
 
 static Ptr<void> gxmRunDeferredMemoryCallback(KernelState &kernel, const MemState &mem, std::mutex &global_lock, std::uint32_t &return_size, Ptr<SceGxmDeferredContextCallback> callback, Ptr<void> userdata,
@@ -951,8 +942,7 @@ static Ptr<void> gxmRunDeferredMemoryCallback(KernelState &kernel, const MemStat
     const ThreadStatePtr thread = lock_and_find(thread_id, kernel.threads, kernel.mutex);
     const Address final_size_addr = stack_alloc(*thread->cpu, 4);
 
-    Ptr<void> result(static_cast<Address>(thread->run_callback(callback.address(),
-        { userdata.address(), size, final_size_addr })));
+    Ptr<void> result(thread->run_callback(callback.address(), { userdata.address(), size, final_size_addr }));
 
     return_size = *Ptr<std::uint32_t>(final_size_addr).get(mem);
     stack_free(*thread->cpu, 4);
@@ -1074,7 +1064,7 @@ struct SceGxmContext {
     }
 
     // insert new memory range used by a command list
-    void insert_new_memory_range(const MemState &mem) {
+    void insert_new_memory_range() {
         CommandListRange range = {
             alloc_space_start.address(),
             alloc_space.address(),
@@ -1097,7 +1087,7 @@ struct SceGxmContext {
 
         if (state.active && state.type == SCE_GXM_CONTEXT_TYPE_DEFERRED) {
             // update memory ranges
-            insert_new_memory_range(mem);
+            insert_new_memory_range();
         }
 
         std::uint32_t actual_size = 0;
@@ -1151,7 +1141,7 @@ struct SceGxmContext {
         alloc_space = alloc_space + allocated_on_vdm;
 
         // the data returned is not part of the vita memory (our commands are too big and do not fit)
-        return reinterpret_cast<uint8_t *>(malloc(size));
+        return static_cast<uint8_t *>(malloc(size));
     }
 
     template <typename T>
@@ -1187,7 +1177,7 @@ struct SceGxmContext {
             if (cmd->flags & renderer::Command::FLAG_FROM_HOST) {
                 delete cmd;
             } else {
-                command_last_free_pos++;
+                ++command_last_free_pos;
             }
         }
     }
@@ -1324,16 +1314,26 @@ EXPORT(int, sceGxmAddRazorGpuCaptureBuffer) {
     return UNIMPLEMENTED();
 }
 
+static void update_viewport(renderer::State &state, SceGxmContext *context) {
+    if (context->state.viewport.enable == SCE_GXM_VIEWPORT_ENABLED) {
+        renderer::set_viewport_real(state, context->renderer.get(), context->state.viewport.offset.x,
+            context->state.viewport.offset.y, context->state.viewport.offset.z, context->state.viewport.scale.x,
+            context->state.viewport.scale.y, context->state.viewport.scale.z);
+    } else {
+        renderer::set_viewport_flat(state, context->renderer.get());
+    }
+}
+
 EXPORT(void, sceGxmSetDefaultRegionClipAndViewport, SceGxmContext *context, uint32_t xMax, uint32_t yMax) {
     TRACY_FUNC(sceGxmSetDefaultRegionClipAndViewport, context, xMax, yMax);
     const std::uint32_t xMin = 0;
     const std::uint32_t yMin = 0;
 
-    context->state.viewport.offset.x = 0.5f * static_cast<float>(1.0f + xMin + xMax);
-    context->state.viewport.offset.y = 0.5f * (static_cast<float>(1.0 + yMin + yMax));
+    context->state.viewport.offset.x = 0.5f * (1.0f + xMin + xMax);
+    context->state.viewport.offset.y = 0.5f * (1.0f + yMin + yMax);
     context->state.viewport.offset.z = 0.5f;
-    context->state.viewport.scale.x = 0.5f * static_cast<float>(1.0f + xMax - xMin);
-    context->state.viewport.scale.y = -0.5f * static_cast<float>(1.0f + yMax - yMin);
+    context->state.viewport.scale.x = 0.5f * (1.0f + xMax - xMin);
+    context->state.viewport.scale.y = -0.5f * (1.0f + yMax - yMin);
     context->state.viewport.scale.z = 0.5f;
 
     context->state.region_clip_min.x = xMin;
@@ -1347,29 +1347,17 @@ EXPORT(void, sceGxmSetDefaultRegionClipAndViewport, SceGxmContext *context, uint
         renderer::set_region_clip(*emuenv.renderer, context->renderer.get(), SCE_GXM_REGION_CLIP_OUTSIDE,
             xMin, xMax, yMin, yMax);
 
-        if (context->state.viewport.enable == SCE_GXM_VIEWPORT_ENABLED) {
-            renderer::set_viewport_real(*emuenv.renderer, context->renderer.get(), context->state.viewport.offset.x,
-                context->state.viewport.offset.y, context->state.viewport.offset.z, context->state.viewport.scale.x,
-                context->state.viewport.scale.y, context->state.viewport.scale.z);
-        } else {
-            renderer::set_viewport_flat(*emuenv.renderer, context->renderer.get());
-        }
+        update_viewport(*emuenv.renderer, context);
     }
 }
 
-static void gxmContextStateRestore(renderer::State &state, MemState &mem, SceGxmContext *context, const bool sync_viewport_and_clip) {
+static void gxmContextStateRestore(renderer::State &state, SceGxmContext *context, const bool sync_viewport_and_clip) {
     if (sync_viewport_and_clip) {
         renderer::set_region_clip(state, context->renderer.get(), SCE_GXM_REGION_CLIP_OUTSIDE,
             context->state.region_clip_min.x, context->state.region_clip_max.x, context->state.region_clip_min.y,
             context->state.region_clip_max.y);
 
-        if (context->state.viewport.enable == SCE_GXM_VIEWPORT_ENABLED) {
-            renderer::set_viewport_real(state, context->renderer.get(), context->state.viewport.offset.x,
-                context->state.viewport.offset.y, context->state.viewport.offset.z, context->state.viewport.scale.x,
-                context->state.viewport.scale.y, context->state.viewport.scale.z);
-        } else {
-            renderer::set_viewport_flat(state, context->renderer.get());
-        }
+        update_viewport(state, context);
     }
 
     renderer::set_cull_mode(state, context->renderer.get(), context->state.cull_mode);
@@ -1472,7 +1460,7 @@ EXPORT(int, sceGxmBeginCommandList, SceGxmContext *deferredContext) {
 
     // Begin the command list by white washing previous command list, and restoring deferred state
     renderer::reset_command_list(deferredContext->renderer->command_list);
-    gxmContextStateRestore(*emuenv.renderer, emuenv.mem, deferredContext, false);
+    gxmContextStateRestore(*emuenv.renderer, deferredContext, false);
 
     deferredContext->state.active = true;
 
@@ -2057,7 +2045,7 @@ EXPORT(int, sceGxmDisplayQueueAddEntry, Ptr<SceGxmSyncObject> oldBuffer, Ptr<Sce
 
     DisplayFrameInfo *frame = predict_next_image(emuenv, newBuffer.address());
 
-    // Block future rendering by setting value2 of sync object
+    // Block future rendering by setting values of sync object
     SceGxmSyncObject *oldBufferSync = oldBuffer.get(emuenv.mem);
     SceGxmSyncObject *newBufferSync = newBuffer.get(emuenv.mem);
 
@@ -2065,28 +2053,15 @@ EXPORT(int, sceGxmDisplayQueueAddEntry, Ptr<SceGxmSyncObject> oldBuffer, Ptr<Sce
         .data = address,
         .old_sync = oldBuffer,
         .new_sync = newBuffer,
-        .new_sync_timestamp = newBufferSync->timestamp_ahead++,
+        .old_sync_timestamp = oldBufferSync->timestamp_ahead,
+        .new_sync_timestamp = newBufferSync->timestamp_ahead,
         .frame_predicted = frame != nullptr
     };
 
-    if (newBuffer == emuenv.gxm.last_fbo_sync_object) {
-        // don't know why, some games like NFS send twice in a row the same buffer to the front...
-        // act like it is not displaying anymore
-        renderer::subject_done(newBufferSync, newBufferSync->last_display);
-    }
-
-    newBufferSync->last_display = newBufferSync->timestamp_ahead.load();
-    emuenv.gxm.last_fbo_sync_object = newBuffer;
-
-    // needed the first time the sync object is used as the old front buffer
-    if (oldBufferSync->last_display == 0) {
-        // resogun draws to the front buffer using the fact that the sync object prevents
-        // it from doing so until it is swapped, the first time it happens must be handled
-        // as a special case
-        renderer::wishlist(oldBufferSync, oldBufferSync->timestamp_ahead);
-
-        oldBufferSync->last_display = ++oldBufferSync->timestamp_ahead;
-    }
+    oldBufferSync->last_display = ++oldBufferSync->timestamp_ahead;
+    if (oldBufferSync != newBufferSync)
+        newBufferSync->last_display = ++newBufferSync->timestamp_ahead;
+    emuenv.gxm.last_display_global = emuenv.gxm.global_timestamp.fetch_add(1, std::memory_order_relaxed);
 
     // function may be blocking here (expected behavior)
     emuenv.gxm.display_queue.push(display_callback);
@@ -2108,7 +2083,7 @@ EXPORT(int, sceGxmDisplayQueueFinish) {
     return 0;
 }
 
-static void gxmSetUniformBuffers(renderer::State &state, GxmState &gxm, SceGxmContext *context, const SceGxmProgram &program, std::span<UniformBuffer> buffers, const UniformBufferSizes &sizes, KernelState &kern, const MemState &mem, const SceUID current_thread) {
+static void gxmSetUniformBuffers(renderer::State &state, GxmState &gxm, SceGxmContext *context, const SceGxmProgram &program, std::span<UniformBuffer> buffers, const UniformBufferSizes &sizes, const MemState &mem) {
     for (size_t i = 0; i < buffers.size(); i++) {
         if (!buffers[i] || sizes.at(i) == 0) {
             continue;
@@ -2163,9 +2138,9 @@ static int gxmDrawElementGeneral(EmuEnvState &emuenv, const char *export_name, c
     const void *indices_ptr = indexData.get(emuenv.mem);
 
     gxmSetUniformBuffers(*emuenv.renderer, emuenv.gxm, context, vertex_program_gxp, context->state.vertex_uniform_buffers, gxm_vertex_program.renderer_data->uniform_buffer_sizes,
-        emuenv.kernel, emuenv.mem, thread_id);
+        emuenv.mem);
     gxmSetUniformBuffers(*emuenv.renderer, emuenv.gxm, context, fragment_program_gxp, context->state.fragment_uniform_buffers, gxm_fragment_program.renderer_data->uniform_buffer_sizes,
-        emuenv.kernel, emuenv.mem, thread_id);
+        emuenv.mem);
 
     if (context->last_precomputed) {
         // Need to re-set the data
@@ -2198,10 +2173,10 @@ static int gxmDrawElementGeneral(EmuEnvState &emuenv, const char *export_name, c
     if (!emuenv.renderer->features.support_memory_mapping) {
         // we don't need to get the vertex buffer size with memory mapping
         if (indexType == SCE_GXM_INDEX_FORMAT_U16) {
-            const uint16_t *const data = reinterpret_cast<const uint16_t *>(indices_ptr);
+            const uint16_t *const data = static_cast<const uint16_t *>(indices_ptr);
             max_index = *std::max_element(&data[0], &data[indexCount]);
         } else {
-            const uint32_t *const data = reinterpret_cast<const uint32_t *>(indices_ptr);
+            const uint32_t *const data = static_cast<const uint32_t *>(indices_ptr);
             max_index = *std::max_element(&data[0], &data[indexCount]);
         }
     }
@@ -2210,8 +2185,7 @@ static int gxmDrawElementGeneral(EmuEnvState &emuenv, const char *export_name, c
     std::uint32_t stream_used = 0;
     for (const SceGxmVertexAttribute &attribute : gxm_vertex_program.attributes) {
         if (!emuenv.renderer->features.support_memory_mapping) {
-            const SceGxmAttributeFormat attribute_format = static_cast<SceGxmAttributeFormat>(attribute.format);
-            const size_t attribute_size = gxm::attribute_format_size(attribute_format) * attribute.componentCount;
+            const size_t attribute_size = gxm::attribute_format_size(attribute.format) * attribute.componentCount;
             const SceGxmVertexStream &stream = gxm_vertex_program.streams[attribute.streamIndex];
             const SceGxmIndexSource index_source = static_cast<SceGxmIndexSource>(stream.indexSource);
             const size_t data_passed_length = gxm::is_stream_instancing(index_source) ? ((instanceCount - 1) * stream.stride) : (max_index * stream.stride);
@@ -2310,10 +2284,10 @@ EXPORT(int, sceGxmDrawPrecomputed, SceGxmContext *context, SceGxmPrecomputedDraw
     std::span<UniformBuffer> fragment_buffers = fragment_state ? std::span(fragment_state->uniform_buffers.get(emuenv.mem), fragment_state->buffer_count) : context->state.fragment_uniform_buffers;
 
     gxmSetUniformBuffers(*emuenv.renderer, emuenv.gxm, context, vertex_program_gxp, vertex_buffers, vertex_program->renderer_data->uniform_buffer_sizes,
-        emuenv.kernel, emuenv.mem, thread_id);
+        emuenv.mem);
 
     gxmSetUniformBuffers(*emuenv.renderer, emuenv.gxm, context, fragment_program_gxp, fragment_buffers, fragment_program->renderer_data->uniform_buffer_sizes,
-        emuenv.kernel, emuenv.mem, thread_id);
+        emuenv.mem);
 
     // Update vertex data. We should stores a copy of the data to pass it to GPU later, since another scene
     // may start to overwrite stuff when this scene is being processed in our queue (in case of OpenGL).
@@ -2350,8 +2324,7 @@ EXPORT(int, sceGxmDrawPrecomputed, SceGxmContext *context, SceGxmPrecomputedDraw
     std::uint32_t stream_used = 0;
     for (const SceGxmVertexAttribute &attribute : vertex_program->attributes) {
         if (!emuenv.renderer->features.support_memory_mapping) {
-            const SceGxmAttributeFormat attribute_format = static_cast<SceGxmAttributeFormat>(attribute.format);
-            const size_t attribute_size = gxm::attribute_format_size(attribute_format) * attribute.componentCount;
+            const size_t attribute_size = gxm::attribute_format_size(attribute.format) * attribute.componentCount;
             const SceGxmVertexStream &stream = vertex_program->streams[attribute.streamIndex];
             const SceGxmIndexSource index_source = static_cast<SceGxmIndexSource>(stream.indexSource);
             const size_t data_passed_length = gxm::is_stream_instancing(index_source) ? ((draw->instance_count - 1) * stream.stride) : (max_index * stream.stride);
@@ -2415,7 +2388,7 @@ EXPORT(int, sceGxmEndCommandList, SceGxmContext *deferredContext, SceGxmCommandL
     *commandList->list = deferredContext->renderer->command_list;
 
     // insert last memory range
-    deferredContext->insert_new_memory_range(emuenv.mem);
+    deferredContext->insert_new_memory_range();
     deferredContext->curr_command_list = nullptr;
 
     // Reset active state
@@ -2451,6 +2424,8 @@ EXPORT(int, sceGxmEndScene, SceGxmContext *context, SceGxmNotification *vertexNo
     if (context->state.fragment_sync_object) {
         SceGxmSyncObject *sync = context->state.fragment_sync_object.get(mem);
         uint32_t cmd_timestamp = ++sync->timestamp_ahead;
+        sync->last_operation_global = emuenv.gxm.global_timestamp.fetch_add(1, std::memory_order_relaxed);
+
         renderer::add_command(context->renderer.get(), renderer::CommandOpcode::SignalSyncObject,
             nullptr, context->state.fragment_sync_object, cmd_timestamp);
     }
@@ -2493,7 +2468,7 @@ EXPORT(int, sceGxmExecuteCommandList, SceGxmContext *context, SceGxmCommandList 
     }
 
     // Restore back our GXM state
-    gxmContextStateRestore(*emuenv.renderer, emuenv.mem, context, true);
+    gxmContextStateRestore(*emuenv.renderer, context, true);
 
     return 0;
 }
@@ -2666,7 +2641,7 @@ EXPORT(int, sceGxmInitialize, const SceGxmInitializeParams *params) {
     const uint32_t max_queue_size = std::max(std::min(params->displayQueueMaxPendingCount, 3U) - 1, 1U);
     emuenv.gxm.display_queue.maxPendingCount_ = max_queue_size;
 
-    const ThreadStatePtr main_thread = util::find(thread_id, emuenv.kernel.threads);
+    const ThreadStatePtr main_thread = emuenv.kernel.get_thread(thread_id);
     const ThreadStatePtr display_queue_thread = emuenv.kernel.create_thread(emuenv.mem, "SceGxmDisplayQueue", Ptr<void>(0), SCE_KERNEL_HIGHEST_PRIORITY_USER, SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT, SCE_KERNEL_STACK_SIZE_USER_DEFAULT, nullptr);
     if (!display_queue_thread) {
         return RET_ERROR(SCE_GXM_ERROR_DRIVER);
@@ -3631,7 +3606,7 @@ EXPORT(void, sceGxmSetCullMode, SceGxmContext *context, SceGxmCullMode mode) {
     }
 }
 
-static constexpr const std::uint32_t SCE_GXM_DEFERRED_CONTEXT_MINIMUM_BUFFER_SIZE = 1024;
+static constexpr std::uint32_t SCE_GXM_DEFERRED_CONTEXT_MINIMUM_BUFFER_SIZE = 1024;
 
 EXPORT(int, sceGxmSetDeferredContextFragmentBuffer, SceGxmContext *deferredContext, Ptr<void> mem, uint32_t size) {
     TRACY_FUNC(sceGxmSetDeferredContextFragmentBuffer, deferredContext, mem, size);
@@ -4068,7 +4043,7 @@ EXPORT(int, sceGxmSetUniformDataF, void *uniformBuffer, const SceGxmProgramParam
         // wtf
         const int vec_to_start_write = componentOffset / parameter->component_count;
         int component_cursor_inside_vector = (componentOffset % parameter->component_count);
-        std::uint8_t *dest = reinterpret_cast<uint8_t *>(uniformBuffer) + parameter->resource_index * sizeof(float)
+        std::uint8_t *dest = static_cast<uint8_t *>(uniformBuffer) + parameter->resource_index * sizeof(float)
             + vec_to_start_write * (size + align_bytes) + component_cursor_inside_vector * comp_size;
 
         int component_to_copy_remain_per_elem = parameter->component_count - component_cursor_inside_vector;
@@ -4174,14 +4149,13 @@ EXPORT(void, sceGxmSetViewport, SceGxmContext *context, float xOffset, float xSc
         context->state.viewport.scale.y = yScale;
         context->state.viewport.scale.z = zScale;
 
+        if (!context->state.active) {
+            LOG_WARN_ONCE("The call was made outside of the Scene. It will be ignored.");
+            return;
+        }
+
         if (context->alloc_space) {
-            if (context->state.viewport.enable == SCE_GXM_VIEWPORT_ENABLED) {
-                renderer::set_viewport_real(*emuenv.renderer, context->renderer.get(), context->state.viewport.offset.x,
-                    context->state.viewport.offset.y, context->state.viewport.offset.z, context->state.viewport.scale.x, context->state.viewport.scale.y,
-                    context->state.viewport.scale.z);
-            } else {
-                renderer::set_viewport_flat(*emuenv.renderer, context->renderer.get());
-            }
+            update_viewport(*emuenv.renderer, context);
         }
     }
 }
@@ -4192,14 +4166,13 @@ EXPORT(void, sceGxmSetViewportEnable, SceGxmContext *context, SceGxmViewportMode
     if (context->state.viewport.enable != enable) {
         context->state.viewport.enable = enable;
 
+        if (!context->state.active) {
+            LOG_WARN_ONCE("The call was made outside of the Scene. It will be applied when the next Scene is called.");
+            return;
+        }
+
         if (context->alloc_space) {
-            if (context->state.viewport.enable == SCE_GXM_VIEWPORT_DISABLED) {
-                renderer::set_viewport_flat(*emuenv.renderer, context->renderer.get());
-            } else {
-                renderer::set_viewport_real(*emuenv.renderer, context->renderer.get(), context->state.viewport.offset.x,
-                    context->state.viewport.offset.y, context->state.viewport.offset.z, context->state.viewport.scale.x, context->state.viewport.scale.y,
-                    context->state.viewport.scale.z);
-            }
+            update_viewport(*emuenv.renderer, context);
         }
     }
 }
@@ -4361,7 +4334,7 @@ EXPORT(int, sceGxmShaderPatcherCreateFragmentProgram, SceGxmShaderPatcher *shade
     fp->is_maskupdate = false;
     fp->program = programId->program;
 
-    if (!renderer::create(fp->renderer_data, *emuenv.renderer, *programId->program.get(mem), blendInfo, emuenv.renderer->gxp_ptr_map, emuenv.cache_path.string().c_str(), emuenv.io.title_id.c_str())) {
+    if (!renderer::create(fp->renderer_data, *emuenv.renderer, *programId->program.get(mem), blendInfo, emuenv.renderer->gxp_ptr_map)) {
         return RET_ERROR(SCE_GXM_ERROR_DRIVER);
     }
 
@@ -4388,7 +4361,7 @@ EXPORT(int, sceGxmShaderPatcherCreateMaskUpdateFragmentProgram, SceGxmShaderPatc
     fp->program = Ptr<const SceGxmProgram>(alloc_callbacked(emuenv, thread_id, shaderPatcher->params, size_mask_gxp));
     memcpy(const_cast<SceGxmProgram *>(fp->program.get(mem)), mask_gxp, size_mask_gxp);
 
-    if (!renderer::create(fp->renderer_data, *emuenv.renderer, *fp->program.get(mem), nullptr, emuenv.renderer->gxp_ptr_map, emuenv.cache_path.string().c_str(), emuenv.io.title_id.c_str())) {
+    if (!renderer::create(fp->renderer_data, *emuenv.renderer, *fp->program.get(mem), nullptr, emuenv.renderer->gxp_ptr_map)) {
         return RET_ERROR(SCE_GXM_ERROR_DRIVER);
     }
 
@@ -4440,7 +4413,7 @@ EXPORT(int, sceGxmShaderPatcherCreateVertexProgram, SceGxmShaderPatcher *shaderP
         vp->attributes.insert(vp->attributes.end(), &attributes[0], &attributes[attributeCount]);
     }
 
-    if (!renderer::create(vp->renderer_data, *emuenv.renderer, *programId->program.get(mem), emuenv.renderer->gxp_ptr_map, vp->attributes, emuenv.cache_path.string().c_str(), emuenv.io.title_id.c_str())) {
+    if (!renderer::create(vp->renderer_data, *emuenv.renderer, *programId->program.get(mem), emuenv.renderer->gxp_ptr_map, vp->attributes)) {
         return RET_ERROR(SCE_GXM_ERROR_DRIVER);
     }
 
@@ -4478,7 +4451,7 @@ EXPORT(int, sceGxmShaderPatcherForceUnregisterProgram, SceGxmShaderPatcher *shad
                 free_callbacked(emuenv, thread_id, shaderPatcher, it->second.address());
                 it = shaderPatcher->vertex_program_cache.erase(it);
             } else {
-                it++;
+                ++it;
             }
         }
     } else {
@@ -4491,7 +4464,7 @@ EXPORT(int, sceGxmShaderPatcherForceUnregisterProgram, SceGxmShaderPatcher *shad
                 free_callbacked(emuenv, thread_id, shaderPatcher, it->second.address());
                 it = shaderPatcher->fragment_program_cache.erase(it);
             } else {
-                it++;
+                ++it;
             }
         }
     }
@@ -4705,7 +4678,7 @@ EXPORT(int, sceGxmTextureGetGammaMode, const SceGxmTexture *texture) {
 EXPORT(uint32_t, sceGxmTextureGetHeight, const SceGxmTexture *texture) {
     TRACY_FUNC(sceGxmTextureGetHeight, texture);
     assert(texture);
-    return static_cast<uint32_t>(gxm::get_height(*texture));
+    return gxm::get_height(*texture);
 }
 
 EXPORT(uint32_t, sceGxmTextureGetLodBias, const SceGxmTexture *texture) {
@@ -5291,7 +5264,9 @@ EXPORT(int, sceGxmTransferCopy, uint32_t width, uint32_t height, uint32_t colorK
         SceGxmSyncObject *sync = syncObject.get(emuenv.mem);
         renderer::send_single_command(*emuenv.renderer, nullptr, renderer::CommandOpcode::WaitSyncObject, false,
             syncObject, sync->last_display.load());
+
         cmd_timestamp = ++sync->timestamp_ahead;
+        sync->last_operation_global = emuenv.gxm.global_timestamp.fetch_add(1, std::memory_order_relaxed);
     }
 
     // needed, otherwise the command is not big enough
@@ -5351,7 +5326,9 @@ EXPORT(int, sceGxmTransferDownscale, SceGxmTransferFormat srcFormat, Ptr<void> s
         SceGxmSyncObject *sync = syncObject.get(emuenv.mem);
         renderer::send_single_command(*emuenv.renderer, nullptr, renderer::CommandOpcode::WaitSyncObject, false,
             syncObject, sync->last_display.load());
+
         cmd_timestamp = ++sync->timestamp_ahead;
+        sync->last_operation_global = emuenv.gxm.global_timestamp.fetch_add(1, std::memory_order_relaxed);
     }
 
     SceGxmTransferImage *src = new SceGxmTransferImage;
@@ -5368,6 +5345,8 @@ EXPORT(int, sceGxmTransferDownscale, SceGxmTransferFormat srcFormat, Ptr<void> s
     dest->address = destAddress;
     dest->x = destX;
     dest->y = destY;
+    dest->width = srcWidth / 2;
+    dest->height = srcHeight / 2;
     dest->stride = destStride;
 
     renderer::transfer_downscale(*emuenv.renderer, src, dest);
@@ -5402,7 +5381,9 @@ EXPORT(int, sceGxmTransferFill, uint32_t fillColor, SceGxmTransferFormat destFor
         SceGxmSyncObject *sync = syncObject.get(emuenv.mem);
         renderer::send_single_command(*emuenv.renderer, nullptr, renderer::CommandOpcode::WaitSyncObject, false,
             syncObject, sync->last_display.load());
+
         cmd_timestamp = ++sync->timestamp_ahead;
+        sync->last_operation_global = emuenv.gxm.global_timestamp.fetch_add(1, std::memory_order_relaxed);
     }
 
     SceGxmTransferImage *dest = new SceGxmTransferImage;

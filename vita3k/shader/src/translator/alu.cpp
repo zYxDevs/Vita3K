@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -131,7 +131,7 @@ bool USSETranslatorVisitor::vmad(
 
     set_repeat_multiplier(2, 2, 2, 4);
 
-    // Write mask is a 4-bit immidiate
+    // Write mask is a 4-bit immediate
     // If a bit is one, a swizzle is active
     BEGIN_REPEAT(repeat_count)
     GET_REPEAT(inst, repeat_mode);
@@ -195,7 +195,7 @@ bool USSETranslatorVisitor::vmad2(
 
     const DataType inst_dt = (dat_fmt) ? DataType::F16 : DataType::F32;
 
-    // Decode mandantory info first
+    // Decode mandatory info first
     inst.opr.dest = decode_dest(inst.opr.dest, dest_n, dest_bank, false, true, 7, m_second_program);
     inst.opr.src0 = decode_src0(inst.opr.src0, src0_n, src0_bank, false, true, 7, m_second_program);
     inst.opr.src1 = decode_src12(inst.opr.src1, src1_n, src1_bank, src1_bank_ext, true, 7, m_second_program);
@@ -999,10 +999,10 @@ bool USSETranslatorVisitor::sop2(
     spv::Id src1_alpha = load(inst.opr.src1, 0b1000, src1_repeat_offset);
     spv::Id src2_alpha = load(inst.opr.src2, 0b1000, src2_repeat_offset);
 
-    src1_color = utils::convert_to_float(m_b, src1_color, DataType::UINT8, true);
-    src2_color = utils::convert_to_float(m_b, src2_color, DataType::UINT8, true);
-    src1_alpha = utils::convert_to_float(m_b, src1_alpha, DataType::UINT8, true);
-    src2_alpha = utils::convert_to_float(m_b, src2_alpha, DataType::UINT8, true);
+    src1_color = utils::convert_to_float(m_b, m_util_funcs, src1_color, DataType::UINT8, true);
+    src2_color = utils::convert_to_float(m_b, m_util_funcs, src2_color, DataType::UINT8, true);
+    src1_alpha = utils::convert_to_float(m_b, m_util_funcs, src1_alpha, DataType::UINT8, true);
+    src2_alpha = utils::convert_to_float(m_b, m_util_funcs, src2_alpha, DataType::UINT8, true);
 
     spv::Id src_color_type = m_b.getTypeId(src1_color);
     spv::Id src_alpha_type = m_b.getTypeId(src1_alpha);
@@ -1086,11 +1086,11 @@ bool shader::usse::USSETranslatorVisitor::sop2m(Imm2 pred,
     };
 
     static auto selector_src1_alpha = [](spv::Builder &b, const spv::Id type, const spv::Id src1, const spv::Id src2) {
-        return b.createOp(spv::OpVectorShuffle, type, { src1, src1, 3, 3, 3, 3 });
+        return b.createOp(spv::OpVectorShuffle, type, { { true, src1 }, { true, src1 }, { false, 3 }, { false, 3 }, { false, 3 }, { false, 3 } });
     };
 
     static auto selector_src2_alpha = [](spv::Builder &b, spv::Id type, const spv::Id src1, const spv::Id src2) {
-        return b.createOp(spv::OpVectorShuffle, type, { src2, src2, 3, 3, 3, 3 });
+        return b.createOp(spv::OpVectorShuffle, type, { { true, src2 }, { true, src2 }, { false, 3 }, { false, 3 }, { false, 3 }, { false, 3 } });
     };
 
     // This opcode always operates on C10.
@@ -1191,8 +1191,8 @@ bool shader::usse::USSETranslatorVisitor::sop2m(Imm2 pred,
     spv::Id src1 = load(inst.opr.src1, 0b1111, 0);
     spv::Id src2 = load(inst.opr.src2, 0b1111, 0);
 
-    src1 = utils::convert_to_float(m_b, src1, DataType::UINT8, true);
-    src2 = utils::convert_to_float(m_b, src2, DataType::UINT8, true);
+    src1 = utils::convert_to_float(m_b, m_util_funcs, src1, DataType::UINT8, true);
+    src2 = utils::convert_to_float(m_b, m_util_funcs, src2, DataType::UINT8, true);
 
     spv::Id src_type = m_b.getTypeId(src1);
 
@@ -1442,12 +1442,12 @@ bool shader::usse::USSETranslatorVisitor::sop3(Imm2 pred,
     spv::Id src1_alpha = load(inst.opr.src1, 0b1000);
     spv::Id src2_alpha = load(inst.opr.src2, 0b1000);
 
-    src0_color = utils::convert_to_float(m_b, src0_color, DataType::UINT8, true);
-    src1_color = utils::convert_to_float(m_b, src1_color, DataType::UINT8, true);
-    src2_color = utils::convert_to_float(m_b, src2_color, DataType::UINT8, true);
-    src0_alpha = utils::convert_to_float(m_b, src0_alpha, DataType::UINT8, true);
-    src1_alpha = utils::convert_to_float(m_b, src1_alpha, DataType::UINT8, true);
-    src2_alpha = utils::convert_to_float(m_b, src2_alpha, DataType::UINT8, true);
+    src0_color = utils::convert_to_float(m_b, m_util_funcs, src0_color, DataType::UINT8, true);
+    src1_color = utils::convert_to_float(m_b, m_util_funcs, src1_color, DataType::UINT8, true);
+    src2_color = utils::convert_to_float(m_b, m_util_funcs, src2_color, DataType::UINT8, true);
+    src0_alpha = utils::convert_to_float(m_b, m_util_funcs, src0_alpha, DataType::UINT8, true);
+    src1_alpha = utils::convert_to_float(m_b, m_util_funcs, src1_alpha, DataType::UINT8, true);
+    src2_alpha = utils::convert_to_float(m_b, m_util_funcs, src2_alpha, DataType::UINT8, true);
 
     spv::Id src_color_type = m_b.getTypeId(src0_color);
     spv::Id src_alpha_type = m_b.getTypeId(src0_alpha);
@@ -1675,7 +1675,7 @@ bool USSETranslatorVisitor::vdual(
     };
 
     // Each instruction might have a different source layout or write mask depending on how the instruction works.
-    // Let's store insturction information in a map so it's easy for each instruction to be loaded.
+    // Let's store instruction information in a map so it's easy for each instruction to be loaded.
     struct DualOpInfo {
         uint8_t src_count;
         bool vector_load;

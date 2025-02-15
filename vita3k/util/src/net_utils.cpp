@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@
 namespace net_utils {
 
 // 0 is ok, negative is bad
-SceHttpErrorCode parse_url(std::string url, parsedUrl &out) {
+SceHttpErrorCode parse_url(const std::string &url, parsedUrl &out) {
     out.scheme = url.substr(0, url.find(':'));
 
     if (out.scheme != "http" && out.scheme != "https")
@@ -216,9 +216,9 @@ const char *int_method_to_char(const int n) {
     }
 }
 
-std::string constructHeaders(HeadersMapType &headers) {
+std::string constructHeaders(const HeadersMapType &headers) {
     std::string headersString;
-    for (auto head : headers) {
+    for (const auto &head : headers) {
         headersString.append(head.first);
         headersString.append(": ");
         headersString.append(head.second);
@@ -228,14 +228,14 @@ std::string constructHeaders(HeadersMapType &headers) {
     return headersString;
 }
 
-bool parseStatusLine(std::string line, std::string &httpVer, int &statusCode, std::string &reason) {
+bool parseStatusLine(const std::string &line, std::string &httpVer, int &statusCode, std::string &reason) {
     auto lineClean = line.substr(0, line.find("\r\n"));
 
     // do this check just in case the server is drunk or retarded, would be nice to do more checks with some regex
     if (!lineClean.starts_with("HTTP/"))
         return false; // what
 
-    const auto firstSpace = lineClean.find(" ");
+    const auto firstSpace = lineClean.find(' ');
     if (firstSpace == std::string::npos)
         return false;
 
@@ -256,7 +256,7 @@ bool parseStatusLine(std::string line, std::string &httpVer, int &statusCode, st
     const int statusCodeInt = std::stoi(statusCodeStr);
 
     std::string reasonStr = "";
-    bool hasReason = codeAndReason.find(" ") != std::string::npos;
+    bool hasReason = codeAndReason.find(' ') != std::string::npos;
     if (hasReason) // standard says that reasons CAN be empty, we have to take this edge case into account
         reasonStr = codeAndReason.substr(4);
 
@@ -271,8 +271,7 @@ bool parseStatusLine(std::string line, std::string &httpVer, int &statusCode, st
     CANNOT have ANYTHING after the last \r\n or \r\n\r\n else it will be treated as a header
 */
 bool parseHeaders(std::string &headersRaw, HeadersMapType &headersOut) {
-    char *ptr;
-    ptr = strtok(headersRaw.data(), "\r\n");
+    char *ptr = strtok(headersRaw.data(), "\r\n");
     // use while loop to check ptr is not null
     while (ptr != NULL) {
         auto line = std::string_view(ptr);
@@ -294,7 +293,7 @@ bool parseHeaders(std::string &headersRaw, HeadersMapType &headersOut) {
     return true;
 }
 
-bool parseResponse(std::string res, SceRequestResponse &reqres) {
+bool parseResponse(const std::string &res, SceRequestResponse &reqres) {
     auto statusLine = res.substr(0, res.find("\r\n"));
     if (!parseStatusLine(statusLine, reqres.httpVer, reqres.statusCode, reqres.reasonPhrase))
         return false;
@@ -303,9 +302,6 @@ bool parseResponse(std::string res, SceRequestResponse &reqres) {
 
     if (!parseHeaders(headersRaw, reqres.headers))
         return false;
-
-    bool hasContLen = false;
-    int contLenVal = 0;
 
     auto contLenIt = reqres.headers.find("Content-Length");
     if (contLenIt == reqres.headers.end()) {
@@ -318,8 +314,9 @@ bool parseResponse(std::string res, SceRequestResponse &reqres) {
 }
 
 bool socketSetBlocking(int sockfd, bool blocking) {
-#ifdef WIN32
-    ioctlsocket(sockfd, FIONBIO, (u_long *)&blocking);
+#ifdef _WIN32
+    u_long blocking_tmp = blocking;
+    ioctlsocket(sockfd, FIONBIO, &blocking_tmp);
 #else
     if (blocking) { // Blocking
         int flags = fcntl(sockfd, F_GETFL); // Get flags
@@ -382,7 +379,7 @@ std::string get_web_regex_result(const std::string &url, const std::regex &regex
 
 uint64_t get_current_time_ms() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
-};
+}
 
 static size_t write_data(void *ptr, size_t size, size_t nmemb, void *stream) {
     size_t written = fwrite(ptr, size, nmemb, (FILE *)stream);
@@ -391,52 +388,68 @@ static size_t write_data(void *ptr, size_t size, size_t nmemb, void *stream) {
 
 typedef int (*CurlDownloadCallback)(void *c, long t, long d);
 
-bool download_file(std::string url, const std::string &output_file_path, ProgressCallback progress_callback) {
+bool download_file(const std::string &url, const std::string &output_file_path, ProgressCallback progress_callback) {
     CURL *curl_download = curl_easy_init();
     if (!curl_download)
         return false;
 
-    CurlDownloadCallback curl_callback = +[](void *user_data, long bytes_total, long downloaded_bytes) {
+    CurlDownloadCallback curl_callback = +[](void *user_data, long total_bytes, long downloaded_bytes) {
         const auto data = (CallbackData *)user_data;
 
-        if (bytes_total == 0)
-            return 0; // Ignore if we dont have the total yet
+        if ((total_bytes == 0) || (downloaded_bytes == 0))
+            return 0; // Ignore if we dont have the total yet or if we haven't downloaded anything
 
         if (!data->second)
             return 0;
-        const auto progress_percent = static_cast<float>(downloaded_bytes) / static_cast<float>(bytes_total) * 100.0f;
 
-        const auto elapsed_time_ms = std::difftime(get_current_time_ms(), data->first);
+        // Calculate progress percentage
+        const auto total_bytes_downloaded = static_cast<double>(downloaded_bytes + data->first.bytes_already_downloaded);
+        const auto file_size = total_bytes + data->first.bytes_already_downloaded;
+        const auto progress_percent = static_cast<float>(total_bytes_downloaded) / static_cast<float>(file_size) * 100.0f;
+
+        // Calculate elapsed time
+        const auto current_time = get_current_time_ms();
+        const auto elapsed_time_ms = std::difftime(current_time, data->first.time);
 
         // Calculate remaining time in seconds
-        const auto remaining_bytes = static_cast<double>(bytes_total - downloaded_bytes);
+        const auto remaining_bytes = static_cast<double>(total_bytes - downloaded_bytes);
         const auto remaining_time = static_cast<uint64_t>((remaining_bytes / downloaded_bytes) * elapsed_time_ms) / 1000;
 
         ProgressState *callback_result = data->second(progress_percent, remaining_time);
 
         std::unique_lock<std::mutex> lock(callback_result->mutex);
 
+        // Store the current pause state
+        const auto pause = callback_result->pause;
+
+        // Wait until the pause state becomes false (unpaused)
         callback_result->cv.wait(lock, [&]() {
             return !callback_result->pause;
         });
 
+        // When coming out of pause, add the time spent to the start time to keep the time consistent
+        if (pause)
+            data->first.time += std::difftime(get_current_time_ms(), current_time);
+
         if (!callback_result->download) {
-            return 1; // Returning anything thats not 0 aborts the request
+            return 1; // Returning anything that's not 0 aborts the request
         }
         return 0;
     };
 
-    auto start_time = get_current_time_ms();
-    auto callbackData = CallbackData(start_time, progress_callback);
+    const auto start_time = get_current_time_ms();
+    const uint64_t bytes_already_downloaded = fs::exists(output_file_path) ? fs::file_size(output_file_path) : 0;
+    const auto callbackData = CallbackData({ start_time, bytes_already_downloaded }, progress_callback);
 
     curl_easy_setopt(curl_download, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl_download, CURLOPT_WRITEFUNCTION, write_data);
     curl_easy_setopt(curl_download, CURLOPT_NOPROGRESS, false); // Enable progress function
+    curl_easy_setopt(curl_download, CURLOPT_RESUME_FROM_LARGE, bytes_already_downloaded);
     curl_easy_setopt(curl_download, CURLOPT_XFERINFODATA, &callbackData);
     curl_easy_setopt(curl_download, CURLOPT_XFERINFOFUNCTION, curl_callback);
     curl_easy_setopt(curl_download, CURLOPT_FOLLOWLOCATION, true); // Follow redirects
 
-    auto fp = fopen(output_file_path.c_str(), "wb");
+    auto fp = fopen(output_file_path.c_str(), "ab");
     if (!fp) {
         LOG_CRITICAL("Could not fopen file {}", output_file_path);
         curl_easy_cleanup(curl_download);
@@ -452,11 +465,6 @@ bool download_file(std::string url, const std::string &output_file_path, Progres
     curl_easy_cleanup(curl_download);
     if (progress_callback)
         progress_callback(0, 0);
-
-    if (res != CURLE_OK) {
-        if (fs::exists(output_file_path))
-            fs::remove(output_file_path);
-    }
 
     if (res == CURLE_ABORTED_BY_CALLBACK)
         LOG_CRITICAL("Aborted update by user");

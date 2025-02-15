@@ -1,8 +1,8 @@
 set(VITA3K_ORG_NAME "Vita3K")
 set(VITA3K_APP_NAME "Vita3K")
 set(VITA3K_APP_VER_HI 0)
-set(VITA3K_APP_VER_MID 1)
-set(VITA3K_APP_VER_LO 9)
+set(VITA3K_APP_VER_MID 2)
+set(VITA3K_APP_VER_LO 0)
 set(VITA3K_APP_VERSION "v${VITA3K_APP_VER_HI}.${VITA3K_APP_VER_MID}.${VITA3K_APP_VER_LO}")
 
 execute_process(
@@ -94,7 +94,6 @@ add_subdirectory(app)
 add_subdirectory(audio)
 add_subdirectory(config)
 add_subdirectory(cpu)
-add_subdirectory(crypto)
 add_subdirectory(ctrl)
 add_subdirectory(codec)
 add_subdirectory(compat)
@@ -115,6 +114,7 @@ add_subdirectory(http)
 add_subdirectory(io)
 add_subdirectory(kernel)
 add_subdirectory(mem)
+add_subdirectory(patch)
 add_subdirectory(module)
 add_subdirectory(modules)
 add_subdirectory(motion)
@@ -132,7 +132,12 @@ add_subdirectory(vkutil)
 
 add_executable(vita3k MACOSX_BUNDLE main.cpp interface.cpp interface.h performance.cpp)
 
-target_link_libraries(vita3k PRIVATE app config ctrl display gdbstub gui gxm io miniz modules packages renderer shader touch)
+if(WIN32)
+	# This file is a bit special, it is run before anything else and must be added here
+	target_sources(vita3k PRIVATE util/src/vc_runtime_checker.cpp)
+endif()
+
+target_link_libraries(vita3k PRIVATE app config cppcommon ctrl display gdbstub gui gxm io miniz modules packages patch renderer shader touch util)
 if(USE_DISCORD_RICH_PRESENCE)
 	target_link_libraries(vita3k PRIVATE discord-rpc)
 endif()
@@ -184,19 +189,13 @@ if(APPLE)
 		POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_BINARY_DIR}/external/discord_game_sdk/lib/x86_64/discord_game_sdk.dylib" "$<TARGET_FILE_DIR:vita3k>/../Resources")
 	endif()
-	set_target_properties(vita3k PROPERTIES LINK_FLAGS "-rpath @loader_path/../Frameworks/ -rpath @loader_path/../Resources/")
+	set_target_properties(vita3k PROPERTIES LINK_FLAGS "-rpath @loader_path/../Frameworks/ -rpath @loader_path/../Resources/ -ld64")
 	target_sources(vita3k PRIVATE Vita3K.icns)
 	set(MACOSX_BUNDLE_ICON_FILE Vita3K.icns)
 	set(MACOSX_BUNDLE_GUI_IDENTIFIER "com.github.Vita3K.Vita3K")
 	set(MACOSX_BUNDLE_BUNDLE_NAME "Vita3K")
 
-	# taken from https://github.com/dolphin-emu/dolphin/blob/master/Source/Core/DolphinQt/CMakeLists.txt
-	find_file(MOLTENVK_DYLIB NAMES libMoltenVK.dylib PATH_SUFFIXES lib)
-	if(NOT MOLTENVK_DYLIB)
-		message(FATAL_ERROR "Couldn't find libMoltenVK.dylib.")
-	else()
-		message("Found Molten-VK dylib: ${MOLTENVK_DYLIB}")
-	endif()
+	message(STATUS "MoltenVK dylib path: ${MOLTENVK_DYLIB}")
 	target_sources(vita3k PRIVATE ${MOLTENVK_DYLIB})
 	set_source_files_properties(${MOLTENVK_DYLIB} PROPERTIES MACOSX_PACKAGE_LOCATION Frameworks)
 elseif(LINUX)
@@ -249,6 +248,7 @@ elseif(LINUX)
 		COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_BINARY_DIR}/external/discord_game_sdk/lib/x86_64/libdiscord_game_sdk.so" "$<TARGET_FILE_DIR:vita3k>")
 	endif()
 elseif(WIN32)
+	target_link_libraries(vita3k PRIVATE Version)
 	target_sources(vita3k PRIVATE resource.h Vita3K.ico Vita3K.rc Windows.manifest)
 	set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT vita3k)
 	set_target_properties(vita3k PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$(Configuration)")
@@ -271,12 +271,12 @@ elseif(WIN32)
 		POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_BINARY_DIR}/external/discord_game_sdk/lib/x86_64/discord_game_sdk.dll" "$<TARGET_FILE_DIR:vita3k>")
 	endif()
-	if(EXISTS "${CMAKE_BINARY_DIR}/external/openssl")
+	if(EXISTS "${OPENSSL_ROOT_DIR}")
 		add_custom_command(
 		TARGET vita3k
 		POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_BINARY_DIR}/external/openssl/openssl-3/x64/bin/libssl-3-x64.dll" "$<TARGET_FILE_DIR:vita3k>"
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_BINARY_DIR}/external/openssl/openssl-3/x64/bin/libcrypto-3-x64.dll" "$<TARGET_FILE_DIR:vita3k>")
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different "${OPENSSL_ROOT_DIR}/bin/libssl-3-x64.dll" "$<TARGET_FILE_DIR:vita3k>"
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different "${OPENSSL_ROOT_DIR}/bin/libcrypto-3-x64.dll" "$<TARGET_FILE_DIR:vita3k>")
 	endif()
 endif()
 

@@ -79,7 +79,7 @@ bergantung pada saiznya dan perkakasan awak.</app_delete_description>
 		</delete>
 		<info>
 			<eligible>Layak</eligible>
-			<ineligible>Tidak Layak</ineligible>
+			<ineligible>Tak Layak</ineligible>
 			<level>Tahap</level>
 			<name>Nama</name>
 			<trophy_earning>Pendapatan Trofi</trophy_earning>
@@ -105,10 +105,11 @@ bergantung pada saiznya dan perkakasan awak.</app_delete_description>
 		<an_error_occurred>Ralat berlaku.
 Kod ralat: {}</an_error_occurred>
 		<cancel>Batal</cancel>
+		<close>Tutup</close>
 		<delete>Padam</delete>
 		<file_corrupted>Fail itu rosak.</file_corrupted>
 		<microphone_disabled>Dayakan mikrofon.</microphone_disabled>
-		<no>gak</no>
+		<no>Gak</no>
 		<please_wait>Sila tunggu...</please_wait>
 		<search>Cari</search>
 		<select_all>Pilih semua</select_all>
@@ -232,7 +233,7 @@ Kod ralat: {}</an_error_occurred>
 
 	<compatibility name="Keserasian">
 		<states>
-			<state id = "-1">Gak Diketahui</state>
+			<state id = "-1">Tak Diketahui</state>
 			<state id = "0">Nothing</state>
 			<state id = "1">Bootable</state>
 			<state id = "2">Intro</state>
@@ -394,37 +395,12 @@ Jangan matikan sistem atau tutup apl.</warning_saving>
 		<app_added_home>Apl telah ditambahkan pada skrin utama.</app_added_home>
 		<delete_all>Memadam semua</delete_all>
 		<notif_deleted>Notifikasi akan dipadamkan.</notif_deleted>
-		<install_failed>Tidak dapat menginstal.</install_failed>
+		<install_failed>Tak dapat menginstal.</install_failed>
 		<install_complete>Instalasi selesai</install_complete>
 		<installing>Menginstalasi...</installing>
 		<no_notif>Tiada Notifikasi.</no_notif>
 		<trophy_earned>Awak telah memperoleh trofi!</trophy_earned>
 	</indicator>
-
-	<initial_setup>
-		<back>Kembali</back>
-		<completed_setup>Awak kini telah menyelesaikan persediaan awal.
-Sistem Vita3K awak sudah sedia!</completed_setup>
-		<select_language>Pilih bahasa.</select_language>
-		<select_pref_path>Pilih laluan pref.</select_pref_path>
-		<current_emu_path>Laluan emulator semasa</current_emu_path>
-		<change_emu_path>Tukar Laluan Emulator</change_emu_path>
-		<reset_emu_path>Tetapkan Semula Laluan Emulator</reset_emu_path>
-		<install_highly_recommended>Menginstal kedua-dua fail perisian tegar adalah sangat disyorkan.</install_highly_recommended>
-		<installed>Instalasi:</installed>
-		<select_interface_settings>Pilih tetapan antara muka.</select_interface_settings>
-		<show_info_bar>Bar Maklumat Kelihatan</show_info_bar>
-		<info_bar_description>Tandai kotak untuk menunjukkan bar maklumat dalam pemilih apl.
-Bar maklumat ialah jam, paras bateri dan pusat notifikasi.</info_bar_description>
-		<show_live_area_screen>Skrin Apl Kawasan Live</show_live_area_screen>
-		<live_area_screen_description>Tandai kotak untuk membuka Kawasan Live secara lalai apabila mengklik pada aplikasi.
-Jika dilumpuhkan, klik kanan pada apl untuk membukanya.</live_area_screen_description>
-		<apps_list_grid_description>Tandai kotak untuk menetapkan senarai apl kepada mode grid seperti PS Vita.</apps_list_grid_description>
-		<icon_size>Saiz Ikon Apl</icon_size>
-		<select_icon_size>Pilih saiz ikon pilihan awak.</select_icon_size>
-		<completed>Selesai.</completed>
-		<next>Seterusnya</next>
-	</initial_setup>
 
 	<install_dialog>
 		<firmware_install>
@@ -529,8 +505,8 @@ Sila semak fail work.bin/rif atau zRIF key.</failed_install_license>
 				<mm_dd_yyyy>MM/DD/YYYY</mm_dd_yyyy>
 			</date_format>
 			<time_format name="Format Masa">
-				<clock_12_hour>Jam 12 Jam</clock_12_hour>
-				<clock_24_hour>Jam 24 Jam</clock_24_hour>
+				<clock_12_hour>Tetapkan 12 Jam</clock_12_hour>
+				<clock_24_hour>Tetapkan 24 Jam</clock_24_hour>
 			</time_format>
 		</date_time>
 		<language name="Bahasa">
@@ -543,7 +519,7 @@ Sila semak fail work.bin/rif atau zRIF key.</failed_install_license>
 						<lang id="262144">Inggeris (United Kingdom)</lang>
 						<lang id="4">Inggeris (United States)</lang>
 						<lang id="8">Sepanyol</lang>
-						<lang id="16">Perancis/lang>
+						<lang id="16">Perancis</lang>
 						<lang id="32">Itali</lang>
 						<lang id="64">Belanda</lang>
 						<lang id="128">Norway</lang>
@@ -586,7 +562,7 @@ Sila muat turun dan pasang PS Vita yang terakhir firmware.</no_modules>
 			<renderer_accuracy>Ketepatan Penyampai</renderer_accuracy>
 			<v_sync_description>Melumpuhkan V-Sync boleh membetulkan isu kelajuan dalam sesetengah permainan.
 Adalah disyorkan untuk memastikan ia didayakan untuk mengelakkan koyakan visual.</v_sync_description>
-			<disable_surface_sync>Lumpuhkan Edit Penyegerakan</disable_surface_sync>
+			<disable_surface_sync>Lumpuhkan Sunting Penyegerakan</disable_surface_sync>
 			<surface_sync_description>Penggodam kelajuan, tandai kotak untuk melumpuhkan penyegerakan permukaan antara CPU dan GPU.
 Penyegerakan permukaan diperlukan oleh sesetengah permainan.
 Memberi rangsangan prestasi yang besar jika dilumpuhkan (khususnya apabila peningkatan dihidupkan).</surface_sync_description>
@@ -613,6 +589,12 @@ Ambil perhatian bahawa beberapa sambungan berfaedah akan dilumpuhkan,
 dan tidak semua GPU serasi dengan ini.</spirv_shader_description>
 			<clean_shaders>Bersihkan Cache dan Log Shader</clean_shaders>
 		</gpu>
+		<audio name="Audio">
+			<audio_backend>Audio Bahagian Belakang</audio_backend>
+			<select_audio_backend>Pilih bahagian belakang audio pilihan awak.</select_audio_backend>
+			<enable_ngs_support>Dayakan NGS Audio</enable_ngs_support>
+			<ngs_description>Nyahtanda kotak untuk melumpuhkan sokongan untuk perpustakaan audio lanjutan NGS.</ngs_description>
+		</audio>
 		<system name="System">
 			<select_enter_button>Masukkan tugasan butang
 Pilih butang 'Enter' awak.</select_enter_button>
@@ -626,10 +608,6 @@ Sesetengah aplikasi tidak menggunakan ini dan mendapatkan butang pengesahan lala
 		</system>
 		<emulator name="Emulator">
 			<boot_apps_full_screen>Boot apl dalam skrin penuh</boot_apps_full_screen>
-			<audio_backend>Audio Bahagian Belakang</audio_backend>
-			<select_audio_backend>Pilih bahagian belakang audio pilihan awak.</select_audio_backend>
-			<enable_ngs_support>Dayakan NGS Audio</enable_ngs_support>
-			<ngs_description>Nyahtanda kotak untuk melumpuhkan sokongan untuk perpustakaan audio lanjutan NGS.</ngs_description>
 			<log_level>Log Tahap</log_level>
 			<select_log_level>Pilih tahap log pilihan awak.</select_log_level>
 			<archive_log>Log Arkib</archive_log>
@@ -747,7 +725,6 @@ lebih rendah boleh meningkatkan prestasi tetapi boleh membuat permainan tidak st
 			<unwatch_import_calls>Nyahlihat Panggilan Import</unwatch_import_calls>
 			<watch_import_calls>Tonton Panggilan Import</watch_import_calls>
 		</debug>
-		<close>Tutup</close>
 		<save_reboot>Simpan & Reboot</save_reboot>
 		<save_apply>Simpan & Apply</save_apply>
 		<save>Simpan</save>
@@ -796,7 +773,8 @@ Adakah awak pasti mahu meneruskan?</user_delete_warn>
 	<vita3k_update name="Vita3K Kemas kini">
  		<new_version_available>Versi baharu Vita3K tersedia.</new_version_available>
 		<back>Belakang</back>
- 		<cancel_update>Adakah awak mahu membatalkan kemas kini?</cancel_update>
+ 		<cancel_update_resume>Adakah awak mahu membatalkan kemas kini?
+Jika anda membatalkan, pada kali anda mengemas kini, Vita3K akan mula memuat turun dari titik ini.</cancel_update_resume>
 		<downloading>Downloading...
 Selepas muat turun selesai, Vita3K akan dimulakan semula secara automatik dan kemudian memasang kemas kini baharu.</downloading>
 		<not_complete_update>Tidak dapat melengkapkan kemas kini.</not_complete_update>
@@ -828,6 +806,5 @@ Selepas muat turun selesai, Vita3K akan dimulakan semula secara automatik dan ke
 		<discord_help>Sokongan tambahan boleh didapati dalam saluran #help</discord_help>
 		<no_piracy>Vita3K tidak membenarkan cetak rompak. Awak mesti membuang permainan awak sendiri.</no_piracy>
 		<show_next_time>Tunjukkan lainKali</show_next_time>
-		<close>Tutup</close>
 	</welcome>
 </lang>

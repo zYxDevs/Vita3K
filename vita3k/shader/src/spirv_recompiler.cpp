@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2025 Vita3K team
 // Copyright (c) 2002-2011 The ANGLE Project Authors.
 //
 // This program is free software; you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 #include <shader/spirv_recompiler.h>
+#include <shader/uniform_block.h>
 #include <shader/usse_disasm.h>
 #include <shader/usse_program_analyzer.h>
 #include <shader/usse_utilities.h>
@@ -24,10 +25,8 @@
 #include <gxm/functions.h>
 #include <gxm/types.h>
 #include <shader/gxp_parser.h>
-#include <shader/profile.h>
 #include <shader/usse_translator_entry.h>
 #include <shader/usse_translator_types.h>
-#include <shader/usse_utilities.h>
 #include <util/fs.h>
 #include <util/log.h>
 #include <util/overloaded.h>
@@ -39,7 +38,6 @@
 #include <algorithm>
 #include <fstream>
 #include <functional>
-#include <iterator>
 #include <list>
 #include <map>
 #include <sstream>
@@ -115,23 +113,13 @@ struct TranslationState {
     bool is_target_glsl = false;
     bool is_vulkan = false;
     spv::ImageFormat image_storage_format = spv::ImageFormat::ImageFormatUnknown;
-    const Hints *hints;
+    const Hints *hints = nullptr;
 };
 
 struct VertexProgramOutputProperties {
     std::string name;
-    std::uint32_t component_count;
-    std::uint32_t location;
-
-    VertexProgramOutputProperties()
-        : name(nullptr)
-        , component_count(0)
-        , location(0) {}
-
-    VertexProgramOutputProperties(const char *name, std::uint32_t component_count, std::uint32_t location)
-        : name(name)
-        , component_count(component_count)
-        , location(location) {}
+    std::uint32_t component_count{};
+    std::uint32_t location{};
 };
 using VertexProgramOutputPropertiesMap = std::map<SceGxmVertexProgramOutputs, VertexProgramOutputProperties>;
 
@@ -153,7 +141,7 @@ static spv::Id create_array_if_needed(spv::Builder &b, const spv::Id param_id, c
 
 static spv::Id get_type_basic(spv::Builder &b, const Input &input) {
     switch (input.type) {
-    // clang-format off
+        // clang-format off
     case DataType::F16:
     case DataType::F32:
          return b.makeFloatType(32);
@@ -170,7 +158,7 @@ static spv::Id get_type_basic(spv::Builder &b, const Input &input) {
 
     // clang-format on
     default: {
-        LOG_ERROR("Unsupported parameter type {} used in shader.", log_hex(input.type));
+        LOG_ERROR("Unsupported parameter type {} used in shader.", log_hex(fmt::underlying(input.type)));
         return get_type_fallback(b);
     }
     }
@@ -260,7 +248,7 @@ static spv::Id create_param_sampler(spv::Builder &b, const std::string &name, co
 }
 
 static spv::Id create_input_variable(spv::Builder &b, SpirvShaderParameters &parameters, utils::SpirvUtilFunctions &utils, const FeatureState &features, const TranslationState &translation_state, const char *name, const RegisterBank bank, const std::uint32_t offset, spv::Id type, const std::uint32_t size, spv::Id force_id = spv::NoResult, DataType dtype = DataType::F32) {
-    std::uint32_t total_var_comp = size / 4;
+    uint32_t total_var_comp = size;
     spv::Id var = !force_id ? (b.createVariable(spv::NoPrecision, reg_type_to_spv_storage_class(bank), type, name)) : force_id;
     Operand dest;
     dest.bank = bank;
@@ -389,8 +377,7 @@ static void create_fragment_inputs(spv::Builder &b, SpirvShaderParameters &param
     // Both vertex output and this struct should stay in a larger varying struct
     auto vertex_varyings_ptr = program.vertex_varyings();
 
-    const SceGxmProgramAttributeDescriptor *descriptor = reinterpret_cast<const SceGxmProgramAttributeDescriptor *>(
-        reinterpret_cast<const std::uint8_t *>(&vertex_varyings_ptr->vertex_outputs1) + vertex_varyings_ptr->vertex_outputs1);
+    auto descriptor = vertex_varyings_ptr->frag_attribute_descriptor();
 
     std::uint32_t pa_offset = 0;
     std::uint32_t anon_tex_count = 0;
@@ -425,7 +412,7 @@ static void create_fragment_inputs(spv::Builder &b, SpirvShaderParameters &param
                 pa_loc = name_map.at(input_id).second;
             }
 
-            std::string pa_type = "uchar";
+            std::string_view pa_type = "uchar";
             DataType pa_dtype = DataType::UINT8;
 
             uint32_t input_type = (descriptor->attribute_info & 0x30100000);
@@ -450,10 +437,10 @@ static void create_fragment_inputs(spv::Builder &b, SpirvShaderParameters &param
             const auto num_comp = ((descriptor->attribute_info >> 22) & 3) + 1;
 
             // Force this to 4. TODO: Don't
-            // Reason is for compability between vertex and fragment. This is like an anti-crash when linking.
+            // Reason is for compatibility between vertex and fragment. This is like an anti-crash when linking.
             // Fragment will only copy what it needed.
             const auto pa_iter_type = b.makeVectorType(b.makeFloatType(32), 4);
-            const auto pa_iter_size = num_comp * 4;
+            const auto pa_iter_size = num_comp;
             spv::Id pa_iter_var = spv::NoResult;
 
             // TODO how about centroid?
@@ -484,7 +471,7 @@ static void create_fragment_inputs(spv::Builder &b, SpirvShaderParameters &param
 
             bool do_coord = false;
 
-            if (input_id >= 0 && input_id <= 0x9000) {
+            if (input_id <= 0x9000) {
                 input_id /= 0x1000;
                 do_coord = true;
             } else if (input_id == 0xD000) {
@@ -546,7 +533,7 @@ static void create_fragment_inputs(spv::Builder &b, SpirvShaderParameters &param
             const auto component_type = (descriptor->component_info >> 4) & 3;
             const auto swizzle_texcoord = (descriptor->attribute_info & 0x300);
 
-            std::string component_type_str = "????";
+            std::string_view component_type_str = "????";
             DataType store_type = DataType::F16;
             switch (component_type) {
             // 0 should be integral
@@ -576,8 +563,8 @@ static void create_fragment_inputs(spv::Builder &b, SpirvShaderParameters &param
             }
             }
 
-            std::string swizzle_str = ".xy";
-            std::string projecting;
+            std::string_view swizzle_str = ".xy";
+            std::string_view projecting;
 
             if (swizzle_texcoord != 0x100) {
                 projecting = "proj";
@@ -600,7 +587,7 @@ static void create_fragment_inputs(spv::Builder &b, SpirvShaderParameters &param
                 prod_pos = -1;
             }
 
-            std::string centroid_str;
+            std::string_view centroid_str;
 
             if ((descriptor->attribute_info & 0x10) == 0x10) {
                 centroid_str = "_CENTROID";
@@ -643,7 +630,7 @@ static void create_fragment_inputs(spv::Builder &b, SpirvShaderParameters &param
                 b.addDecoration(tex_query_info.sampler, spv::DecorationBinding, sampler_resource_index);
                 if (translation_state.is_vulkan)
                     b.addDecoration(tex_query_info.sampler, spv::DecorationDescriptorSet, program.is_vertex() ? 2 : 3);
-                samplers[sampler_resource_index] = { tex_query_info.sampler, sampler_resource_index, tex_query_info.component_type, tex_query_info.component_count };
+                samplers[sampler_resource_index] = { tex_query_info.sampler, sampler_resource_index, tex_query_info.component_type, tex_query_info.component_count, (dim_type == spv::DimCube) };
             } else {
                 tex_query_info.sampler = samplers[sampler_resource_index].id;
             }
@@ -754,7 +741,7 @@ static void create_fragment_inputs(spv::Builder &b, SpirvShaderParameters &param
 
             spv::Id i32 = b.makeIntegerType(32, true);
             current_coord = b.createUnaryOp(spv::OpConvertFToS, b.makeVectorType(i32, 4), b.createLoad(current_coord, spv::NoPrecision));
-            current_coord = b.createOp(spv::OpVectorShuffle, b.makeVectorType(i32, 2), { current_coord, current_coord, 0, 1 });
+            current_coord = b.createOp(spv::OpVectorShuffle, b.makeVectorType(i32, 2), { { true, current_coord }, { true, current_coord }, { false, 0 }, { false, 1 } });
 
             if (features.preserve_f16_nan_as_u16) {
                 spv::Id uiv4 = b.makeVectorType(b.makeUintType(32), 4);
@@ -784,6 +771,29 @@ static void create_fragment_inputs(spv::Builder &b, SpirvShaderParameters &param
                 source = spv::NoResult;
             } else {
                 source = b.createOp(spv::OpImageRead, v4, { b.createLoad(color_attachment, spv::NoPrecision), current_coord });
+
+                if (translation_state.is_vulkan) {
+                    const spv::Id old_source = source;
+                    // if (is_srgb)
+                    spv::Builder::If cond_builder(parameters.is_srgb_constant, spv::SelectionControlMaskNone, b);
+
+                    // perform gamma correction:
+                    // source.xyz = pow(source.xyz, vec3(2.2));
+                    const spv::Id v3 = b.makeVectorType(f32, 3);
+                    spv::Id rgb = b.createOp(spv::OpVectorShuffle, v3, { { true, source }, { true, source }, { false, 0 }, { false, 1 }, { false, 2 } });
+                    const spv::Id gamma = utils::make_uniform_vector_from_type(b, v3, 2.2f);
+                    rgb = b.createBuiltinCall(v3, utils.std_builtins, GLSLstd450Pow, { rgb, gamma });
+                    source = b.createOp(spv::OpVectorShuffle, v4, { { true, rgb }, { true, source }, { false, 0 }, { false, 1 }, { false, 2 }, { false, 6 } });
+
+                    store_source_result();
+
+                    // else (no shader gamma correction, nothing to do)
+                    cond_builder.makeBeginElse();
+                    source = old_source;
+                    store_source_result();
+                    cond_builder.makeEndIf();
+                    source = 0;
+                }
             }
         } else {
             // Try to initialize outs[0] to some nice value. In case the GPU has garbage data for our shader
@@ -1063,6 +1073,14 @@ static SpirvShaderParameters create_parameters(spv::Builder &b, const SceGxmProg
         b.addDecoration(translation_state.render_info_id, spv::DecorationBinding, translation_state.is_vulkan ? 1 : 3);
         if (translation_state.is_vulkan)
             b.addDecoration(translation_state.render_info_id, spv::DecorationDescriptorSet, 0);
+
+        if (program.is_frag_color_used() && features.should_use_shader_interlock() && translation_state.is_vulkan) {
+            // specialization constant for shader interlock:
+            // layout (constant_id = GAMMA_CORRECTION_SPECIALIZATION_ID) const bool is_srgb = false;
+            spv_params.is_srgb_constant = b.makeBoolConstant(false, true);
+            b.addDecoration(spv_params.is_srgb_constant, spv::DecorationSpecId, (int)GAMMA_CORRECTION_SPECIALIZATION_ID);
+            b.addName(spv_params.is_srgb_constant, "is_srgb");
+        }
     }
 
     spv_params.render_info_id = translation_state.render_info_id;
@@ -1077,7 +1095,7 @@ static SpirvShaderParameters create_parameters(spv::Builder &b, const SceGxmProg
                     .type = DataType::F32,
                 };
                 const uint32_t copy_size = std::min(buffer.reg_block_size, REG_SA_COUNT - buffer.reg_start_offset);
-                usse::utils::buffer_address_access(b, spv_params, utils, features, dest, 0, b.makeIntConstant(0), sizeof(uint32_t), copy_size, translation_state.is_fragment, host_idx);
+                usse::utils::buffer_address_access(b, spv_params, utils, features, dest, 0, b.makeIntConstant(0), sizeof(uint32_t), copy_size, host_idx);
             } else {
                 const uint32_t reg_block_size_in_f32v = std::min<uint32_t>(buffer.reg_block_size + 3, REG_SA_COUNT) / 4;
                 const auto spv_buffer = utils::create_access_chain(b, spv::StorageClassStorageBuffer, spv_params.buffer_container,
@@ -1088,18 +1106,29 @@ static SpirvShaderParameters create_parameters(spv::Builder &b, const SceGxmProg
     }
 
     const auto add_var_to_reg = [&](const Input &input, const std::string &name, std::uint16_t semantic, bool pa, bool regformat, std::int32_t location) {
-        const spv::Id param_type = get_param_type(b, input);
         const int type_size = get_data_type_size(input.type);
         spv::Id var;
         if (regformat) {
-            const int num_comp = (type_size * input.array_size * input.component_count + 3) / 4;
+            DataType unsigned_matching_type;
+            if (type_size == 1)
+                unsigned_matching_type = DataType::UINT8;
+            else if (type_size == 2)
+                unsigned_matching_type = DataType::UINT16;
+            else
+                unsigned_matching_type = DataType::UINT32;
+
+            int num_comp = input.array_size * input.component_count;
+            if (input.type == DataType::C10)
+                // this is 10-bit and not 8-bit
+                num_comp = (num_comp * 10 + 7) / 8;
+
             spv::Id type;
             if (num_comp > 4) {
                 // a matrix is being sent, pack everything into an array of vec4
                 const int num_vec4 = (num_comp + 3) / 4;
-                type = b.makeArrayType(b.makeVectorType(i32_type, 4), b.makeUintConstant(num_vec4), 0);
+                type = b.makeArrayType(b.makeVectorType(u32, 4), b.makeUintConstant(num_vec4), 0);
             } else {
-                type = utils::make_vector_or_scalar_type(b, i32_type, num_comp);
+                type = utils::make_vector_or_scalar_type(b, u32, num_comp);
             }
             var = b.createVariable(spv::NoPrecision, spv::StorageClassInput, type, name.c_str());
 
@@ -1107,17 +1136,18 @@ static SpirvShaderParameters create_parameters(spv::Builder &b, const SceGxmProg
             var_to_reg.var = var;
             var_to_reg.pa = pa;
             var_to_reg.offset = input.offset;
-            var_to_reg.size = num_comp * 4;
-            var_to_reg.dtype = DataType::INT32;
+            var_to_reg.size = num_comp;
+            var_to_reg.dtype = unsigned_matching_type;
             translation_state.var_to_regs.push_back(var_to_reg);
         } else {
+            const spv::Id param_type = get_param_type(b, input);
             var = b.createVariable(spv::NoPrecision, spv::StorageClassInput, param_type, name.c_str());
 
             VarToReg var_to_reg = {};
             var_to_reg.var = var;
             var_to_reg.pa = pa;
             var_to_reg.offset = input.offset;
-            var_to_reg.size = input.array_size * input.component_count * 4;
+            var_to_reg.size = input.array_size * input.component_count;
             var_to_reg.dtype = input.type;
             translation_state.var_to_regs.push_back(var_to_reg);
         }
@@ -1292,7 +1322,7 @@ static SpirvShaderParameters create_parameters(spv::Builder &b, const SceGxmProg
 
     // We should avoid ugly and long GLSL code generated. Also, inefficient SPIR-V code.
     // Packing literals into vector may help solving this.
-    if (literal_pairs.size() != 0) {
+    if (!literal_pairs.empty()) {
         std::uint32_t composite_base = literal_pairs[0].first;
 
         std::vector<spv::Id> constituents;
@@ -1308,7 +1338,7 @@ static SpirvShaderParameters create_parameters(spv::Builder &b, const SceGxmProg
                 composite_var = constituents[0];
             }
             create_input_variable(b, spv_params, utils, features, translation_state, nullptr, RegisterBank::SECATTR, composite_base, spv::NoResult,
-                static_cast<int>(constituents.size() * 4), composite_var);
+                static_cast<int>(constituents.size()), composite_var);
         };
 
         for (std::uint32_t i = 1; i < program.literals_count; i++) {
@@ -1389,14 +1419,38 @@ static spv::Function *make_frag_finalize_function(spv::Builder &b, const SpirvSh
     color = utils::load(b, parameters, utils, features, color_val_operand, 0xF, reg_off);
 
     if (!is_float_data_type(color_val_operand.type))
-        color = utils::convert_to_float(b, color, color_val_operand.type, true);
+        color = utils::convert_to_float(b, utils, color, color_val_operand.type, true);
 
     if (program.is_frag_color_used() && features.should_use_shader_interlock()) {
         spv::Id signed_i32 = b.makeIntType(32);
         spv::Id coord_id = b.createLoad(translate_state.frag_coord_id, spv::NoPrecision);
         spv::Id translated_id = b.createUnaryOp(spv::OpConvertFToS, b.makeVectorType(signed_i32, 4), coord_id);
-        translated_id = b.createOp(spv::OpVectorShuffle, b.makeVectorType(signed_i32, 2), { translated_id, translated_id, 0, 1 });
-        b.createNoResultOp(spv::OpImageWrite, { b.createLoad(translate_state.color_attachment_id, spv::NoPrecision), translated_id, color });
+        translated_id = b.createOp(spv::OpVectorShuffle, b.makeVectorType(signed_i32, 2), { { true, translated_id }, { true, translated_id }, { false, 0 }, { false, 1 } });
+
+        if (translate_state.is_vulkan) {
+            spv::Id old_color = color;
+            // if (is_srgb)
+            spv::Builder::If cond_builder(parameters.is_srgb_constant, spv::SelectionControlMaskNone, b);
+
+            // perform inverse gamma correction:
+            // color.xyz = pow(color.xyz, vec3(1/2.2));
+            const spv::Id f32 = b.makeFloatType(32);
+            const spv::Id v4 = b.makeVectorType(f32, 4);
+            const spv::Id v3 = b.makeVectorType(f32, 3);
+            spv::Id rgb = b.createOp(spv::OpVectorShuffle, v3, { { true, color }, { true, color }, { false, 0 }, { false, 1 }, { false, 2 } });
+            const spv::Id gamma = utils::make_uniform_vector_from_type(b, v3, 1 / 2.2f);
+            rgb = b.createBuiltinCall(v3, utils.std_builtins, GLSLstd450Pow, { rgb, gamma });
+            color = b.createOp(spv::OpVectorShuffle, v4, { { true, rgb }, { true, color }, { false, 0 }, { false, 1 }, { false, 2 }, { false, 6 } });
+
+            b.createNoResultOp(spv::OpImageWrite, { b.createLoad(translate_state.color_attachment_id, spv::NoPrecision), translated_id, color });
+
+            // else (no shader gamma correction, nothing to do)
+            cond_builder.makeBeginElse();
+            b.createNoResultOp(spv::OpImageWrite, { b.createLoad(translate_state.color_attachment_id, spv::NoPrecision), translated_id, old_color });
+            cond_builder.makeEndIf();
+        } else {
+            b.createNoResultOp(spv::OpImageWrite, { b.createLoad(translate_state.color_attachment_id, spv::NoPrecision), translated_id, color });
+        }
 
         if (features.preserve_f16_nan_as_u16) {
             color_val_operand.type = DataType::UINT16;
@@ -1429,7 +1483,7 @@ static spv::Function *make_frag_finalize_function(spv::Builder &b, const SpirvSh
         spv::Id i32 = b.makeIntegerType(32, true);
         spv::Id v2i32 = b.makeVectorType(i32, 2);
         current_coord = b.createUnaryOp(spv::OpConvertFToS, b.makeVectorType(i32, 4), b.createLoad(current_coord, spv::NoPrecision));
-        current_coord = b.createOp(spv::OpVectorShuffle, v2i32, { current_coord, current_coord, 0, 1 });
+        current_coord = b.createOp(spv::OpVectorShuffle, v2i32, { { true, current_coord }, { true, current_coord }, { false, 0 }, { false, 1 } });
 
         spv::Id sampled_type = b.makeFloatType(32);
         spv::Id v4 = b.makeVectorType(sampled_type, 4);
@@ -1480,7 +1534,7 @@ static spv::Function *make_vert_finalize_function(spv::Builder &b, const SpirvSh
     // list is used here to gurantee the vertex outputs are written in right order
     std::list<SceGxmVertexProgramOutputs> vertex_outputs_list;
     const auto add_vertex_output_info = [&](SceGxmVertexProgramOutputs vo, const char *name, std::uint32_t component_count, std::uint32_t location) {
-        vertex_properties_map.emplace(vo, VertexProgramOutputProperties(name, component_count, location));
+        vertex_properties_map.emplace(vo, VertexProgramOutputProperties{ name, component_count, location });
         vertex_outputs_list.push_back(vo);
     };
     add_vertex_output_info(SCE_GXM_VERTEX_PROGRAM_OUTPUT_POSITION, "v_Position", 4, 0);
@@ -1688,7 +1742,7 @@ static spv::Function *make_frag_initialize_function(spv::Builder &b, Translation
     return frag_init_func;
 }
 
-static void generate_update_mask_body(spv::Builder &b, utils::SpirvUtilFunctions &utils, const FeatureState &features, TranslationState &translate_state) {
+static void generate_update_mask_body(spv::Builder &b, TranslationState &translate_state) {
     const spv::Id writing_mask_var = utils::create_access_chain(b, spv::StorageClassUniform, translate_state.render_info_id, { b.makeIntConstant(FRAG_UNIFORM_writing_mask) });
     const spv::Id writing_mask = b.createLoad(writing_mask_var, spv::NoPrecision);
 
@@ -1702,7 +1756,7 @@ static void generate_update_mask_body(spv::Builder &b, utils::SpirvUtilFunctions
     b.createStore(mask_v, out);
 }
 
-static SpirvCode convert_gxp_to_spirv_impl(const SceGxmProgram &program, const std::string &shader_hash, const FeatureState &features, TranslationState &translation_state, bool force_shader_debug, std::function<bool(const std::string &ext, const std::string &dump)> dumper) {
+static SpirvCode convert_gxp_to_spirv_impl(const SceGxmProgram &program, const std::string &shader_hash, const FeatureState &features, TranslationState &translation_state, bool force_shader_debug, const std::function<bool(const std::string &ext, const std::string &dump)> &dumper) {
     SpirvCode spirv;
 
     SceGxmProgramType program_type = program.get_type();
@@ -1823,7 +1877,7 @@ static SpirvCode convert_gxp_to_spirv_impl(const SceGxmProgram &program, const s
 
         generate_shader_body(b, parameters, program, features, utils, begin_hook_func, end_hook_func, texture_queries, translation_state.render_info_id, spv_func_main, translation_state.interfaces);
     } else {
-        generate_update_mask_body(b, utils, features, translation_state);
+        generate_update_mask_body(b, translation_state);
     }
     b.leaveFunction();
 
@@ -1861,7 +1915,7 @@ static SpirvCode convert_gxp_to_spirv_impl(const SceGxmProgram &program, const s
     return spirv;
 }
 
-static std::string convert_spirv_to_glsl(const std::string &shader_name, SpirvCode &spirv_binary, const FeatureState &features, TranslationState &translation_state, bool is_frag_color_used) {
+static std::string convert_spirv_to_glsl(const std::string &shader_name, SpirvCode &spirv_binary, const FeatureState &features, TranslationState &translation_state) {
     spirv_cross::CompilerGLSL glsl(std::move(spirv_binary));
 
     spirv_cross::CompilerGLSL::Options options;
@@ -1938,7 +1992,7 @@ static spv::ImageFormat translate_color_format(const SceGxmColorBaseFormat forma
 // ***************************
 
 GeneratedShader convert_gxp(const SceGxmProgram &program, const std::string &shader_hash, const FeatureState &features, const Target target, const Hints &hints, bool maskupdate,
-    bool force_shader_debug, std::function<bool(const std::string &ext, const std::string &dump)> dumper) {
+    bool force_shader_debug, const std::function<bool(const std::string &ext, const std::string &dump)> &dumper) {
     TranslationState translation_state;
     translation_state.is_fragment = program.is_fragment();
     translation_state.is_maskupdate = maskupdate;
@@ -1957,7 +2011,7 @@ GeneratedShader convert_gxp(const SceGxmProgram &program, const std::string &sha
     if (translation_state.is_target_glsl) {
         // also generate the glsl file
         // this destroys shader.spirv
-        shader.glsl = convert_spirv_to_glsl(shader_hash, shader.spirv, features, translation_state, program.is_frag_color_used());
+        shader.glsl = convert_spirv_to_glsl(shader_hash, shader.spirv, features, translation_state);
 
         if (LOG_SHADER_CODE || force_shader_debug) {
             LOG_INFO("Generated GLSL:\n{}", shader.glsl);
